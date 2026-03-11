@@ -53,11 +53,12 @@ local TEMP_DIR = "/tmp"
 local CLAUDE_MAX_RAW_BYTES = 3750000
 
 -- ── Logger ────────────────────────────────────────────────────────────────
+-- Writes incrementally so crash mid-run still captures everything up to that point.
 local Logger = {}
 
 function Logger:init(settings)
     self.enabled = settings.enableLogging
-    self.lines = {}
+    self.fileHandle = nil
     self.startTime = LrDate.currentTime()
     if not self.enabled then return end
 
@@ -67,7 +68,16 @@ function Logger:init(settings)
         folder = LrPathUtils.getStandardFilePath('documents')
     end
 
+    -- Validate log folder exists, fall back to Documents
+    if not LrFileUtils.exists(folder) then
+        local fallback = LrPathUtils.getStandardFilePath('documents')
+        self:_writeRaw("WARNING: Log folder does not exist: " .. folder .. " — using " .. fallback .. "\n")
+        folder = fallback
+    end
+
     self.filePath = folder .. "/AI_Keywords_" .. timestamp .. ".log"
+    self.fileHandle = io.open(self.filePath, "w")
+
     self:log("═══════════════════════════════════════════════════════════")
     self:log("AI Keywords — Run started at " .. LrDate.timeToUserFormat(self.startTime, "%Y-%m-%d %H:%M:%S"))
     self:log("Provider: " .. settings.provider)
@@ -85,10 +95,18 @@ function Logger:init(settings)
     self:log("═══════════════════════════════════════════════════════════")
 end
 
+function Logger:_writeRaw(text)
+    if self.fileHandle then
+        self.fileHandle:write(text)
+        self.fileHandle:flush()
+    end
+end
+
 function Logger:log(message)
     if not self.enabled then return end
     local ts = LrDate.timeToUserFormat(LrDate.currentTime(), "%H:%M:%S")
-    table.insert(self.lines, ts .. "  " .. message)
+    local line = ts .. "  " .. message .. "\n"
+    self:_writeRaw(line)
 end
 
 function Logger:logImage(filename, result, detail)
@@ -110,11 +128,9 @@ function Logger:finish(successCount, errorCount, skippedCount)
         successCount, errorCount, skippedCount, elapsed))
     self:log("═══════════════════════════════════════════════════════════")
 
-    -- Write all lines to file
-    local fh = io.open(self.filePath, "w")
-    if fh then
-        fh:write(table.concat(self.lines, "\n") .. "\n")
-        fh:close()
+    if self.fileHandle then
+        self.fileHandle:close()
+        self.fileHandle = nil
     end
 end
 
@@ -652,6 +668,11 @@ LrTasks.startAsyncTask(function()
             if confirm ~= "ok" then return end
         end
 
+        -- Clean up orphaned temp files from interrupted runs
+        pcall(function()
+            LrTasks.execute("rm -f /tmp/ai_kw_req_* /tmp/ai_kw_resp_* /tmp/ai_kw_cfg_* 2>/dev/null")
+        end)
+
         -- Initialize logger
         local log = setmetatable({}, { __index = Logger })
         log:init(SETTINGS)
@@ -715,8 +736,8 @@ LrTasks.startAsyncTask(function()
                 LrTasks.yield()
                 local writeOk, writeErr = LrTasks.pcall(function()
                     local writeResult = applyKeywords(catalog, photo, keywords, filename, SETTINGS)
-                    if writeResult == "aborted" then
-                        error("Catalog write was aborted by Lightroom")
+                    if writeResult ~= "executed" then
+                        error("Catalog write not executed (result: " .. tostring(writeResult) .. ")")
                     end
                 end)
                 LrTasks.yield()
