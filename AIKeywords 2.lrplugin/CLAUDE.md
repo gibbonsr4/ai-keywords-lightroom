@@ -56,44 +56,40 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 
 ## Known Issues / Code Review Findings
 
-### Reliability
-1. **Rendered temp files may not always get cleaned up** — LrExportSession names output files itself. No cleanup sweep at end of run.
-2. **withWriteAccessDo return value not fully handled** — Checks for "aborted" but not "queued". Should verify `writeResult == "executed"`.
-3. **Logger writes all lines at end** — LR crash mid-run = zero log output. Should flush incrementally.
-4. **parseAliases called per-image** — Should parse once at run start.
-5. **No validation that log folder exists** — io.open fails silently.
-6. **LR_reimportExportedPhoto = false** may not prevent catalog import on all LR versions.
+### Resolved in v3.0.0
+1. ~~Temp file cleanup~~ — Sweep `/tmp/ai_kw_*` at start of each run.
+2. ~~writeResult not fully checked~~ — Now checks `~= "executed"`.
+3. ~~Logger writes all at end~~ — Now writes incrementally with flush.
+4. ~~parseAliases per-image~~ — Parsed once at run start.
+5. ~~No log folder validation~~ — Falls back to ~/Documents if folder doesn't exist.
+7. ~~Base64 encoder slow~~ — Pre-built lookup table.
+9. ~~fileSize opens file~~ — Uses LrFileUtils.fileAttributes().
+12. ~~API key in plain text~~ — Backlogged (GitHub issue #1). API key no longer visible in process list.
+13. ~~Validation after dialog closes~~ — actionBinding grays out Save when invalid.
+14. ~~No Ollama URL validation~~ — Checked in actionBinding.
+15. ~~"Settings Saved" dialog~~ — Removed.
+16. ~~Logger crash-safety~~ — Incremental writes.
+17. ~~No per-image timing~~ — Logged per image.
+18. ~~Prompt not logged~~ — Full prompt logged per image.
+19. ~~Raw response not logged~~ — Raw model output logged.
+20. ~~Outdated README~~ — Comprehensive rewrite.
+21. ~~Info.lua comment~~ — Fixed.
+22. ~~Version 2.0.0~~ — Bumped to 3.0.0.
+23. ~~LrPluginInfoUrl placeholder~~ — Points to GitHub repo.
+24. ~~Config vs Prefs variable~~ — Renamed to Prefs.
+25. ~~SUPPORTED_EXTS comment~~ — Documented why it exists.
+27. ~~GPS/prompt leakage~~ — Parser filters coordinates, markdown, pure numbers.
+- ~~Shell injection via shellEscape~~ — Curl uses config files, no user input in shell commands.
+- ~~API key in process list~~ — API key written to temp config file, not command line.
+- ~~Prefs.lua boolean defaults bug~~ — Explicit nil-check helpers for booleans.
+- ~~json.encode unhandled~~ — Wrapped in pcall.
+- ~~maxKeywords not in prompt~~ — Model told "Return up to N keywords".
 
-### Efficiency
-7. **Base64 encoder is slow** — Byte-by-byte string concat. Table-based approach would be faster.
-8. **LrExportSession per image** — Creates new session per photo. Could batch renders (10 at a time).
-9. **fileSize() opens file to seek** — LrFileUtils.fileAttributes() returns size without opening.
-10. **Aliases parsed per-image** (duplicate of #4).
-
-### Settings UI
+### Remaining Issues
+6. **LR_reimportExportedPhoto = false** may not prevent catalog import on all LR versions. (Monitoring)
+8. **LrExportSession per image** — Could batch renders. Deferred: API time is the bottleneck, not render time.
 11. **Both provider sections always visible** — LR SDK limitation, documented.
-12. **API key in plain text** — LR SDK has LrPasswords for encrypted storage.
-13. **Validation after dialog closes** — User must reopen Settings to fix. Should use actionBinding.
-14. **No Ollama URL validation** — Could check on save.
-15. **Unnecessary "Settings Saved" dialog** — Extra click for no reason.
-
-### Logging
-16. **Crash-safety** — Write incrementally (see #3).
-17. **No render/API timing** — Per-image timing would help diagnose slow runs.
-18. **Prompt not logged** — Full prompt with context would help debug keyword quality.
-19. **Raw model response not logged** — Can't see what model returned vs what parser extracted.
-
-### README / Documentation
-20. **Multiple outdated references** — sips, RAW not supported, old folder name, masked API key.
-21. **Info.lua comment says "OllamaKeywords"** — Should say AI Keywords.
-22. **Version still 2.0.0** — Should be 3.0.0 for LrExportSession refactor.
-23. **LrPluginInfoUrl is placeholder** — Points to https://github.com/.
-
-### Code Quality
-24. **Variable named Config holds Prefs module** — Confusing. Should be `local Prefs = ...`.
-25. **SUPPORTED_EXTS redundant with LrExportSession** — Could try render and handle failure instead.
-26. **curlPost deletes temp files before response is fully processed** — Should delete after all processing.
-27. **GPS/prompt leakage into keywords** — Model sometimes includes coordinates or markdown in output. Parser should filter.
+26. **curlPost temp file timing** — Response is read into memory before deletion; minor debug concern only.
 
 ### Parent Keyword Inconsistency
 - `createKeyword` with `returnExisting=true` finds existing root-level keywords and returns them instead of creating under the parent. Existing root keywords from earlier runs stay flat.

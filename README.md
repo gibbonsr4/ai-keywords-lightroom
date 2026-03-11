@@ -10,7 +10,7 @@ Automatically generates and applies searchable keywords to selected photos using
 
 | Requirement | Notes |
 |---|---|
-| macOS (Apple Silicon recommended) | Uses `sips` for image resizing, `curl` for API calls |
+| macOS (Apple Silicon recommended) | Uses `curl` for API calls |
 | Lightroom Classic 6+ | |
 
 **For Ollama (local):**
@@ -21,17 +21,17 @@ Automatically generates and applies searchable keywords to selected photos using
 - An Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
 
 ### Supported File Types
-JPEG, PNG, TIFF, WEBP
+JPEG, PNG, TIFF, WEBP, HEIC/HEIF, and all RAW formats supported by Lightroom (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, PEF, SRW).
 
-> **RAW files are not supported.** Export a JPEG copy and run the plugin on that.
+Images are rendered via Lightroom's own export pipeline, so any format Lightroom can open will work.
 
 ---
 
 ## Installation
 
-1. Place the `OllamaKeywords.lrplugin` folder somewhere permanent (e.g. `~/Documents/LR Plugins/`)
+1. Place the `AIKeywords 2.lrplugin` folder somewhere permanent (e.g. `~/Documents/LR Plugins/`)
 2. In Lightroom Classic: **File → Plug-in Manager → Add**
-3. Navigate to and select the `OllamaKeywords.lrplugin` folder
+3. Navigate to and select the `AIKeywords 2.lrplugin` folder
 4. Click **Done**
 
 ---
@@ -48,11 +48,11 @@ JPEG, PNG, TIFF, WEBP
 
 ## Configuration
 
-Open **Library → Plug-in Extras → Settings…** to configure.
+Open **Library → Plug-in Extras → Settings…** to configure. The Save button is disabled until all required fields are valid.
 
 ### Provider
 
-Choose between **Ollama (local)** and **Claude API (cloud)** via radio buttons. The settings panel shows the relevant connection options for the selected provider.
+Choose between **Ollama (local)** and **Claude API (cloud)** via radio buttons.
 
 ### Ollama Settings
 
@@ -60,7 +60,7 @@ The plugin checks Ollama's status when you open Settings and shows whether it's 
 
 - **Start Ollama** directly from Settings (or open the download page if not installed)
 - **Choose a model** from the dropdown with install status indicators (✓ = installed)
-- **Install models** by clicking "Install Selected Model in Terminal"
+- **Install models** by clicking "Install in Terminal"
 
 Recommended models for 24GB Apple Silicon:
 
@@ -79,14 +79,14 @@ Recommended models for 24GB Apple Silicon:
 
 | Setting | Notes |
 |---|---|
-| API Key | Your Anthropic API key (masked in Settings) |
+| API Key | Your Anthropic API key |
 | Model | Haiku 4.5 (~$0.002/image) or Sonnet 4.6 (~$0.007/image) |
 
 ### Keyword Settings
 
 | Setting | Default | Notes |
 |---|---|---|
-| Max keywords | 20 | Per photo, 1–50 |
+| Max keywords | 20 | Per photo, 1–50. Also communicated to the model in the prompt. |
 | Keyword case | As returned | Options: As returned, lowercase, Title Case |
 | Timeout | 90 seconds | Per image |
 | Parent keyword | (blank) | See below |
@@ -108,6 +108,7 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 ### Other Options
 
 - **Folder context:** When enabled, catalog folder names (e.g. `Dominican Republic > Santo Domingo`) are passed to the model as location hints. Generic folder names like "Photos" and "Imports" are filtered out.
+- **Folder aliases:** Expand short folder names (e.g. `DR=Dominican Republic; CR=Costa Rica`).
 - **Prompt:** Fully customizable. Click "Reset to default prompt" to restore the built-in prompt.
 
 ---
@@ -126,6 +127,20 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 
 ---
 
+## Logging
+
+Enable logging in Settings to get a timestamped log file for each run. Logs are written incrementally (crash-safe) and include:
+
+- Provider, model, and settings used
+- Per-image results (keywords, errors, skips)
+- Full prompt sent to the model
+- Raw model response
+- Per-image timing
+
+Log files are saved to the configured folder (default: `~/Documents`).
+
+---
+
 ## Performance
 
 - **Ollama:** ~4–20 seconds per image depending on model and hardware
@@ -139,9 +154,8 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 
 ## Troubleshooting
 
-**Ollama: Timeout / curl exit 28** → Increase timeout in Settings. Check if resize failed in the error details.
+**Ollama: Timeout / curl exit 28** → Increase timeout in Settings.
 **Ollama: "Could not connect"** → Start Ollama from Settings or run `ollama serve` in Terminal.
 **Claude: "API error"** → Check your API key and account balance at console.anthropic.com.
-**All photos skipped** → RAW files selected; export JPEG copies first.
 **Keywords not appearing under parent** → See note above about existing root-level keywords.
 **Old prompt after upgrade** → Open Settings → "Reset to default prompt".
