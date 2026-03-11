@@ -20,9 +20,11 @@ local LrProgressScope   = import 'LrProgressScope'
 local LrTasks           = import 'LrTasks'
 
 local json   = dofile(_PLUGIN.path .. '/dkjson.lua')
-local Config = dofile(_PLUGIN.path .. '/Prefs.lua')
+local Prefs  = dofile(_PLUGIN.path .. '/Prefs.lua')
 
 -- ── Constants ─────────────────────────────────────────────────────────────
+-- SUPPORTED_EXTS is checked before LrExportSession to give clear error messages
+-- for unsupported formats (e.g. PSD, AI) instead of opaque render failures.
 local SUPPORTED_EXTS = {
     jpg = true, jpeg = true, png = true,
     tif = true, tiff = true, webp = true,
@@ -643,7 +645,7 @@ end
 LrTasks.startAsyncTask(function()
     LrFunctionContext.callWithContext("AIGenerateKeywords", function(context)
 
-        local SETTINGS = Config.getPrefs()
+        local SETTINGS = Prefs.getPrefs()
         local catalog      = LrApplication.activeCatalog()
         local targetPhotos = catalog:getTargetPhotos()
 

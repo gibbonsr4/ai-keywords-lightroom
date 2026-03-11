@@ -153,12 +153,12 @@ LrTasks.startAsyncTask(function()
         props.claudeModel      = current.claudeModel
         props.maxKeywords      = tostring(current.maxKeywords)
         props.timeoutSecs      = tostring(current.timeoutSecs)
-        props.useFolderContext = (current.useFolderContext == true)
-        props.skipKeyworded    = (current.skipKeyworded == true)
+        props.useFolderContext = current.useFolderContext
+        props.skipKeyworded    = current.skipKeyworded
         props.parentKeyword    = current.parentKeyword
         props.keywordCase      = current.keywordCase
         props.prompt           = current.prompt
-        props.enableLogging    = (current.enableLogging == true)
+        props.enableLogging    = current.enableLogging
         props.logFolder        = current.logFolder
         props.folderAliases    = current.folderAliases
 
@@ -583,30 +583,68 @@ LrTasks.startAsyncTask(function()
                     },
                 },
             },
+
+            -- ═══════════════════════════════════════════════════════════
+            -- VALIDATION MESSAGE (shown when Save is disabled)
+            -- ═══════════════════════════════════════════════════════════
+            f:row {
+                f:static_text {
+                    title = "",
+                    width = LrView.share("label_width"),
+                },
+                f:static_text {
+                    title           = LrView.bind("validationMessage"),
+                    text_color      = LrView.kWarningColor,
+                    fill_horizontal = 1,
+                },
+            },
         }
+
+        -- Validation function — returns (isValid, message)
+        local function validateSettings(values)
+            local maxKw = tonumber(values.maxKeywords)
+            if not maxKw or maxKw < 1 or maxKw > 50 then
+                return false, "Max keywords must be a number between 1 and 50."
+            end
+            local timeout = tonumber(values.timeoutSecs)
+            if not timeout or timeout < 5 then
+                return false, "Timeout must be at least 5 seconds."
+            end
+            if values.provider == "claude" and (values.claudeApiKey == nil or values.claudeApiKey == "") then
+                return false, "Claude API selected — enter your Anthropic API key."
+            end
+            local url = values.ollamaUrl or ""
+            if values.provider == "ollama" and not url:match("^https?://") then
+                return false, "Ollama URL must start with http:// or https://"
+            end
+            return true, ""
+        end
+
+        -- Initialize validation state
+        props.validationMessage = ""
+        local valid, msg = validateSettings(props)
+        props.validationMessage = msg
 
         local result = LrDialogs.presentModalDialog {
             title      = "AI Keywords - Settings",
             contents   = contents,
             actionVerb = "Save",
+            actionBinding = {
+                enabled = {
+                    bind_to_object = props,
+                    keys = { "maxKeywords", "timeoutSecs", "claudeApiKey", "provider", "ollamaUrl" },
+                    operation = function(_, values)
+                        local isValid, validMsg = validateSettings(values)
+                        props.validationMessage = validMsg
+                        return isValid
+                    end,
+                },
+            },
         }
 
         if result == "ok" then
             local maxKw   = tonumber(props.maxKeywords)
             local timeout = tonumber(props.timeoutSecs)
-
-            if not maxKw or maxKw < 1 or maxKw > 50 then
-                LrDialogs.message("Invalid Value", "Max keywords must be a number between 1 and 50.", "warning")
-                return
-            end
-            if not timeout or timeout < 5 then
-                LrDialogs.message("Invalid Value", "Timeout must be at least 5 seconds.", "warning")
-                return
-            end
-            if props.provider == "claude" and (props.claudeApiKey == nil or props.claudeApiKey == "") then
-                LrDialogs.message("Missing API Key", "Please enter your Anthropic API key to use Claude.", "warning")
-                return
-            end
 
             prefs.provider         = props.provider
             prefs.ollamaUrl        = props.ollamaUrl
@@ -623,12 +661,6 @@ LrTasks.startAsyncTask(function()
             prefs.enableLogging    = props.enableLogging
             prefs.logFolder        = props.logFolder
             prefs.folderAliases    = props.folderAliases
-
-            LrDialogs.message(
-                "Settings Saved",
-                "Settings saved. They will apply on the next keyword generation run.",
-                "info"
-            )
         end
 
     end)

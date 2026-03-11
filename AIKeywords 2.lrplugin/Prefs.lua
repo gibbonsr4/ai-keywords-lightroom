@@ -40,24 +40,40 @@ local DEFAULTS = {
     ),
 }
 
+-- Helper: Lua's `cond and valTrue or valFalse` breaks when valTrue is false.
+-- Use explicit nil checks for booleans.
+local function boolPref(prefs, key)
+    if prefs[key] == nil then return DEFAULTS[key] end
+    return prefs[key]
+end
+
+local function stringPref(prefs, key, allowEmpty)
+    if allowEmpty then
+        if prefs[key] == nil then return DEFAULTS[key] end
+        return prefs[key]
+    end
+    if prefs[key] ~= nil and prefs[key] ~= "" then return prefs[key] end
+    return DEFAULTS[key]
+end
+
 local function getPrefs()
     local prefs = LrPrefs.prefsForPlugin()
     return {
-        provider         = (prefs.provider    ~= nil and prefs.provider    ~= "") and prefs.provider    or DEFAULTS.provider,
-        ollamaUrl        = (prefs.ollamaUrl   ~= nil and prefs.ollamaUrl   ~= "") and prefs.ollamaUrl   or DEFAULTS.ollamaUrl,
-        model            = (prefs.model        ~= nil and prefs.model        ~= "") and prefs.model       or DEFAULTS.model,
-        claudeApiKey     = (prefs.claudeApiKey ~= nil)                              and prefs.claudeApiKey or DEFAULTS.claudeApiKey,
-        claudeModel      = (prefs.claudeModel  ~= nil and prefs.claudeModel  ~= "") and prefs.claudeModel or DEFAULTS.claudeModel,
+        provider         = stringPref(prefs, "provider"),
+        ollamaUrl        = stringPref(prefs, "ollamaUrl"),
+        model            = stringPref(prefs, "model"),
+        claudeApiKey     = stringPref(prefs, "claudeApiKey", true),
+        claudeModel      = stringPref(prefs, "claudeModel"),
         maxKeywords      = (prefs.maxKeywords  ~= nil) and prefs.maxKeywords  or DEFAULTS.maxKeywords,
         timeoutSecs      = (prefs.timeoutSecs  ~= nil) and prefs.timeoutSecs  or DEFAULTS.timeoutSecs,
-        useFolderContext = (prefs.useFolderContext == nil) and DEFAULTS.useFolderContext or prefs.useFolderContext,
-        skipKeyworded    = (prefs.skipKeyworded == nil) and DEFAULTS.skipKeyworded or prefs.skipKeyworded,
-        parentKeyword    = (prefs.parentKeyword ~= nil) and prefs.parentKeyword or DEFAULTS.parentKeyword,
-        keywordCase      = (prefs.keywordCase  ~= nil and prefs.keywordCase  ~= "") and prefs.keywordCase or DEFAULTS.keywordCase,
-        enableLogging    = (prefs.enableLogging == nil) and DEFAULTS.enableLogging or prefs.enableLogging,
-        logFolder        = (prefs.logFolder    ~= nil) and prefs.logFolder    or DEFAULTS.logFolder,
-        folderAliases    = (prefs.folderAliases ~= nil) and prefs.folderAliases or DEFAULTS.folderAliases,
-        prompt           = (prefs.prompt       ~= nil and prefs.prompt       ~= "") and prefs.prompt      or DEFAULTS.prompt,
+        useFolderContext = boolPref(prefs, "useFolderContext"),
+        skipKeyworded    = boolPref(prefs, "skipKeyworded"),
+        parentKeyword    = stringPref(prefs, "parentKeyword", true),
+        keywordCase      = stringPref(prefs, "keywordCase"),
+        enableLogging    = boolPref(prefs, "enableLogging"),
+        logFolder        = stringPref(prefs, "logFolder", true),
+        folderAliases    = stringPref(prefs, "folderAliases", true),
+        prompt           = stringPref(prefs, "prompt"),
     }
 end
 
