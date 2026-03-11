@@ -135,7 +135,12 @@ function Logger:finish(successCount, errorCount, skippedCount)
 end
 
 -- ── Base64 encoder ────────────────────────────────────────────────────────
-local B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+-- Pre-built lookup table avoids repeated string.sub() calls per character.
+local B64_CHAR = {}
+do
+    local B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    for i = 0, 63 do B64_CHAR[i] = B64:sub(i + 1, i + 1) end
+end
 
 local function base64Encode(data)
     local result = {}
@@ -143,22 +148,22 @@ local function base64Encode(data)
     for i = 1, len - 2, 3 do
         local b1, b2, b3 = data:byte(i, i + 2)
         local n = b1 * 65536 + b2 * 256 + b3
-        result[#result + 1] = B64:sub(math.floor(n / 262144) + 1, math.floor(n / 262144) + 1)
-            .. B64:sub(math.floor(n / 4096) % 64 + 1, math.floor(n / 4096) % 64 + 1)
-            .. B64:sub(math.floor(n / 64) % 64 + 1, math.floor(n / 64) % 64 + 1)
-            .. B64:sub(n % 64 + 1, n % 64 + 1)
+        result[#result + 1] = B64_CHAR[math.floor(n / 262144)]
+            .. B64_CHAR[math.floor(n / 4096) % 64]
+            .. B64_CHAR[math.floor(n / 64) % 64]
+            .. B64_CHAR[n % 64]
     end
     local r = len % 3
     if r == 1 then
         local n = data:byte(len) * 65536
-        result[#result + 1] = B64:sub(math.floor(n / 262144) + 1, math.floor(n / 262144) + 1)
-            .. B64:sub(math.floor(n / 4096) % 64 + 1, math.floor(n / 4096) % 64 + 1) .. '=='
+        result[#result + 1] = B64_CHAR[math.floor(n / 262144)]
+            .. B64_CHAR[math.floor(n / 4096) % 64] .. '=='
     elseif r == 2 then
         local b1, b2 = data:byte(len - 1, len)
         local n = b1 * 65536 + b2 * 256
-        result[#result + 1] = B64:sub(math.floor(n / 262144) + 1, math.floor(n / 262144) + 1)
-            .. B64:sub(math.floor(n / 4096) % 64 + 1, math.floor(n / 4096) % 64 + 1)
-            .. B64:sub(math.floor(n / 64) % 64 + 1, math.floor(n / 64) % 64 + 1) .. '='
+        result[#result + 1] = B64_CHAR[math.floor(n / 262144)]
+            .. B64_CHAR[math.floor(n / 4096) % 64]
+            .. B64_CHAR[math.floor(n / 64) % 64] .. '='
     end
     return table.concat(result)
 end
@@ -171,9 +176,8 @@ local function readBinaryFile(path)
 end
 
 local function fileSize(path)
-    local f = io.open(path, 'rb')
-    if not f then return 0 end
-    local s = f:seek('end'); f:close(); return s or 0
+    local attrs = LrFileUtils.fileAttributes(path)
+    return (attrs and attrs.fileSize) or 0
 end
 
 local function getExt(path)
@@ -217,7 +221,7 @@ local function parseAliases(aliasStr)
 end
 
 -- ── Folder context ────────────────────────────────────────────────────────
-local function getFolderContext(photo, catalog, settings)
+local function getFolderContext(photo, catalog, aliases)
     local fullPath = photo:getRawMetadata('path')
     local relPath = fullPath
     for _, rootFolder in ipairs(catalog:getFolders()) do
@@ -228,7 +232,6 @@ local function getFolderContext(photo, catalog, settings)
         end
     end
     local folderPart = relPath:match("^(.*)/[^/]+$") or ""
-    local aliases = parseAliases(settings.folderAliases)
     local parts = {}
     for part in folderPart:gmatch("[^/]+") do
         local lower = part:lower()
@@ -677,6 +680,9 @@ LrTasks.startAsyncTask(function()
         local log = setmetatable({}, { __index = Logger })
         log:init(SETTINGS)
 
+        -- Parse folder aliases once (not per-image)
+        local folderAliases = parseAliases(SETTINGS.folderAliases)
+
         local providerLabel = SETTINGS.provider == "claude" and "Claude API" or "Ollama"
         local progress = LrProgressScope({
             title           = "AI Keywords (" .. providerLabel .. ")",
@@ -715,7 +721,7 @@ LrTasks.startAsyncTask(function()
             -- Build folder hint
             local folderHint = nil
             if SETTINGS.useFolderContext then
-                local parts = getFolderContext(photo, catalog, SETTINGS)
+                local parts = getFolderContext(photo, catalog, folderAliases)
                 if #parts > 0 then
                     folderHint = table.concat(parts, " > ")
                 end
