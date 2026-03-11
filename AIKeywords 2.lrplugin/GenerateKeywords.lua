@@ -180,8 +180,10 @@ local function safeDelete(path)
     pcall(function() LrFileUtils.delete(path) end)
 end
 
+-- POSIX-safe shell escaping: wrap in single quotes, escape internal single quotes.
+-- This prevents injection via $(...), backticks, double-quote tricks, etc.
 local function shellEscape(s)
-    return s:gsub('"', '\\"')
+    return "'" .. s:gsub("'", "'\\''") .. "'"
 end
 
 -- ── Folder aliases ────────────────────────────────────────────────────────
@@ -399,20 +401,42 @@ local function parseKeywords(raw, settings)
 end
 
 -- ── curl helper ──────────────────────────────────────────────────────────
-local function curlPost(curlCmd, tmpIn, tmpOut, settings, imgSize)
+-- Writes a curl config file with headers/URL/method, then invokes curl with
+-- only controlled temp file paths on the command line. This prevents shell
+-- injection and keeps sensitive values (API keys) out of the process list.
+local function writeCurlConfig(cfgPath, url, headers, timeoutSecs)
+    local fh = io.open(cfgPath, "w")
+    if not fh then return false end
+    fh:write("-s\n")
+    fh:write("-X POST\n")
+    fh:write(string.format('url = "%s"\n', url))
+    for _, h in ipairs(headers) do
+        fh:write(string.format('header = "%s"\n', h))
+    end
+    fh:write(string.format("max-time = %d\n", timeoutSecs))
+    fh:close()
+    return true
+end
+
+local function curlPost(cfgPath, tmpIn, tmpOut, imgSize, timeoutSecs)
+    local curlCmd = string.format(
+        "curl -K %s -d @%s -o %s",
+        shellEscape(cfgPath), shellEscape(tmpIn), shellEscape(tmpOut)
+    )
     local exitCode = LrTasks.execute(curlCmd)
 
     local result = nil
     local rf = io.open(tmpOut, "r")
     if rf then result = rf:read("*all"); rf:close() end
 
+    safeDelete(cfgPath)
     safeDelete(tmpIn)
     safeDelete(tmpOut)
 
     if exitCode ~= 0 or not result or result == "" then
         local detail = string.format(
             "curl exit %d. Image: %.1f MB. Timeout: %ds.",
-            exitCode, imgSize / 1048576, settings.timeoutSecs
+            exitCode, imgSize / 1048576, timeoutSecs
         )
         if exitCode == 28 then
             detail = detail .. " Timeout — increase timeout or use a faster model."
@@ -437,19 +461,20 @@ local function queryOllama(img, prompt, settings, ts)
         }}
     })
 
+    local tmpCfg = TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
     local tmpIn  = TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
     local tmpOut = TEMP_DIR .. "/ai_kw_resp_" .. ts .. ".json"
+
+    if not writeCurlConfig(tmpCfg, settings.ollamaUrl .. "/api/chat",
+            { "Content-Type: application/json" }, settings.timeoutSecs) then
+        return nil, "Could not write curl config file"
+    end
 
     local fh = io.open(tmpIn, "w")
     if not fh then return nil, "Could not write temp file: " .. tmpIn end
     fh:write(body); fh:close()
 
-    local curlCmd = string.format(
-        'curl -s -X POST "%s/api/chat" -H "Content-Type: application/json" -d @"%s" -o "%s" --max-time %d',
-        shellEscape(settings.ollamaUrl), shellEscape(tmpIn), shellEscape(tmpOut), settings.timeoutSecs
-    )
-
-    local result, err = curlPost(curlCmd, tmpIn, tmpOut, settings, img.fileSize)
+    local result, err = curlPost(tmpCfg, tmpIn, tmpOut, img.fileSize, settings.timeoutSecs)
     if not result then return nil, err end
 
     local ok, decoded = pcall(function() return json.decode(result) end)
@@ -487,26 +512,25 @@ local function queryClaude(img, prompt, settings, ts)
         }}
     })
 
+    local apiKey = settings.claudeApiKey:gsub("%s+", "")
+
+    local tmpCfg = TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
     local tmpIn  = TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
     local tmpOut = TEMP_DIR .. "/ai_kw_resp_" .. ts .. ".json"
+
+    if not writeCurlConfig(tmpCfg, "https://api.anthropic.com/v1/messages", {
+        "x-api-key: " .. apiKey,
+        "anthropic-version: 2023-06-01",
+        "content-type: application/json",
+    }, settings.timeoutSecs) then
+        return nil, "Could not write curl config file"
+    end
 
     local fh = io.open(tmpIn, "w")
     if not fh then return nil, "Could not write temp file: " .. tmpIn end
     fh:write(body); fh:close()
 
-    local apiKey = settings.claudeApiKey:gsub("%s+", "")
-
-    local curlCmd = string.format(
-        'curl -s -X POST "https://api.anthropic.com/v1/messages"'
-        .. ' -H "x-api-key: %s"'
-        .. ' -H "anthropic-version: 2023-06-01"'
-        .. ' -H "content-type: application/json"'
-        .. ' -d @"%s" -o "%s" --max-time %d',
-        shellEscape(apiKey),
-        shellEscape(tmpIn), shellEscape(tmpOut), settings.timeoutSecs
-    )
-
-    local result, err = curlPost(curlCmd, tmpIn, tmpOut, settings, img.fileSize)
+    local result, err = curlPost(tmpCfg, tmpIn, tmpOut, img.fileSize, settings.timeoutSecs)
     if not result then return nil, err end
 
     local ok, decoded = pcall(function() return json.decode(result) end)

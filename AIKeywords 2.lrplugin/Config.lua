@@ -35,14 +35,26 @@ local function isOllamaInstalled()
     return exitCode == 0
 end
 
+-- POSIX-safe shell escaping (defense-in-depth for temp file paths)
+local function shellEscape(s)
+    return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
 -- ── Query Ollama for installed models ─────────────────────────────────────
 local function getInstalledModels(ollamaUrl)
     local installed = {}
+    local tmpCfg = "/tmp/ai_kw_tags_cfg.txt"
     local tmpOut = "/tmp/ai_kw_tags.json"
-    local cmd = string.format(
-        'curl -s "%s/api/tags" -o "%s" --max-time 5',
-        ollamaUrl, tmpOut
-    )
+
+    -- Write curl config file to avoid interpolating ollamaUrl into shell command
+    local cfh = io.open(tmpCfg, "w")
+    if not cfh then return installed, false end
+    cfh:write("-s\n")
+    cfh:write(string.format('url = "%s/api/tags"\n', ollamaUrl))
+    cfh:write("max-time = 5\n")
+    cfh:close()
+
+    local cmd = string.format("curl -K %s -o %s", shellEscape(tmpCfg), shellEscape(tmpOut))
     local exitCode = LrTasks.execute(cmd)
 
     if exitCode == 0 then
@@ -50,6 +62,7 @@ local function getInstalledModels(ollamaUrl)
         if rf then
             local response = rf:read("*all")
             rf:close()
+            pcall(function() LrFileUtils.delete(tmpCfg) end)
             pcall(function() LrFileUtils.delete(tmpOut) end)
             if response and response ~= "" then
                 local success, data = pcall(function() return json.decode(response) end)
@@ -67,6 +80,7 @@ local function getInstalledModels(ollamaUrl)
         end
     end
 
+    pcall(function() LrFileUtils.delete(tmpCfg) end)
     pcall(function() LrFileUtils.delete(tmpOut) end)
     return installed, false
 end
@@ -276,9 +290,11 @@ LrTasks.startAsyncTask(function()
                         enabled = LrView.bind("installBtnEnabled"),
                         action  = function()
                             LrTasks.startAsyncTask(function()
+                                -- Model values come from VISION_MODELS dropdown but escape for safety
+                                local safeModel = props.model:gsub("[^%w%.%-%:_]", "")
                                 local cmd = string.format(
                                     'osascript -e \'tell application "Terminal" to do script "ollama pull %s"\'',
-                                    props.model
+                                    safeModel
                                 )
                                 LrTasks.execute(cmd)
                             end)
