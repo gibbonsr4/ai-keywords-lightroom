@@ -701,9 +701,13 @@ LrTasks.startAsyncTask(function()
         -- Parse folder aliases once (not per-image)
         local folderAliases = parseAliases(SETTINGS.folderAliases)
 
+        -- Log the base prompt once (without per-image context)
+        log:log("Base prompt: " .. SETTINGS.prompt)
+
+        local modelName = SETTINGS.provider == "claude" and SETTINGS.claudeModel or SETTINGS.model
         local providerLabel = SETTINGS.provider == "claude" and "Claude API" or "Ollama"
         local progress = LrProgressScope({
-            title           = "AI Keywords (" .. providerLabel .. ")",
+            title           = "AI Keywords (" .. providerLabel .. " — " .. modelName .. ")",
             functionContext = context,
         })
 
@@ -757,8 +761,13 @@ LrTasks.startAsyncTask(function()
             local keywords, rawResponse, err = queryModel(photo, folderHint, gpsInfo, SETTINGS, i)
             local queryElapsed = LrDate.currentTime() - queryStart
 
-            -- Log prompt, raw response, and timing
-            log:log(string.format("  Prompt: %s", buildPrompt(SETTINGS, folderHint, gpsInfo):sub(1, 300)))
+            -- Log per-image context, raw response, and timing
+            if folderHint then
+                log:log(string.format("  Folder context: %s", folderHint))
+            end
+            if gpsInfo then
+                log:log(string.format("  GPS: %.4f, %.4f", gpsInfo.latitude, gpsInfo.longitude))
+            end
             if rawResponse then
                 log:log(string.format("  Raw response: %s", rawResponse:sub(1, 500)))
             end
