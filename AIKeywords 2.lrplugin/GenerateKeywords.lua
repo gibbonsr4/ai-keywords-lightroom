@@ -393,7 +393,9 @@ local function buildPrompt(settings, folderHint, gpsInfo)
 
     -- Append output format instruction (separate from user-editable prompt)
     prompt = prompt ..
-        " Return ONLY a comma-separated list of keywords — no sentences, no numbering, no explanation."
+        string.format(" Return up to %d keywords.", settings.maxKeywords) ..
+        " Return ONLY a comma-separated list — no sentences, no numbering, no explanation." ..
+        " Do not include GPS coordinates, folder paths, or metadata in your keywords."
     return prompt
 end
 
@@ -403,11 +405,23 @@ local function parseKeywords(raw, settings)
     local seen = {}
     for kw in raw:gmatch("[^,\n]+") do
         local t = trim(kw)
+        -- Strip markdown formatting
+        t = t:gsub("%*%*", "")          -- bold markers
+        t = t:gsub("^#+%s*", "")        -- heading markers
+        t = t:gsub("`", "")             -- inline code
+        -- Strip numbering, bullets, Unicode bullets
         t = t:gsub("^%d+[%.%)]%s+", "")
         t = t:gsub("^[%-%*]%s+", "")
         t = t:gsub("^\226\128\162%s*", "")
+        -- Strip trailing punctuation
         t = t:gsub("[%.,:;!?]+$", "")
         t = trim(t)
+
+        -- Filter out GPS coordinates and pure numbers
+        if t:match("^%-?%d+%.%d+$") then t = "" end                     -- single coordinate
+        if t:match("^%-?%d+%.%d+%s*[,;]%s*%-?%d+%.%d+$") then t = "" end  -- coordinate pair
+        if t:match("^%d+$") then t = "" end                              -- pure integer
+
         t = normalizeCase(t, settings.keywordCase)
         local key = t:lower()
         if #t > 1 and #t < 80 and not seen[key] then
@@ -470,7 +484,7 @@ end
 
 -- ── Ollama provider ──────────────────────────────────────────────────────
 local function queryOllama(img, prompt, settings, ts)
-    local body = json.encode({
+    local encodeOk, body = pcall(json.encode, {
         model    = settings.model,
         stream   = false,
         messages = {{
@@ -479,6 +493,7 @@ local function queryOllama(img, prompt, settings, ts)
             images  = { img.base64 },
         }}
     })
+    if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
 
     local tmpCfg = TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
     local tmpIn  = TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
@@ -509,7 +524,7 @@ end
 
 -- ── Claude API provider ──────────────────────────────────────────────────
 local function queryClaude(img, prompt, settings, ts)
-    local body = json.encode({
+    local encodeOk, body = pcall(json.encode, {
         model      = settings.claudeModel,
         max_tokens = 1024,
         messages   = {{
@@ -530,6 +545,7 @@ local function queryClaude(img, prompt, settings, ts)
             },
         }}
     })
+    if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
 
     local apiKey = settings.claudeApiKey:gsub("%s+", "")
 
@@ -588,14 +604,14 @@ local function queryModel(photo, folderHint, gpsInfo, settings, imageIndex)
         raw, err = queryOllama(img, prompt, settings, ts)
     end
 
-    if not raw then return nil, err end
+    if not raw then return nil, nil, err end
 
     local keywords = parseKeywords(raw, settings)
     if #keywords == 0 then
-        return nil, "No parseable keywords. Raw: " .. raw:sub(1, 200)
+        return nil, raw, "No parseable keywords. Raw: " .. raw:sub(1, 200)
     end
 
-    return keywords, nil
+    return keywords, raw, nil
 end
 
 -- ── Catalog keyword writer ───────────────────────────────────────────────
@@ -735,7 +751,16 @@ LrTasks.startAsyncTask(function()
             end
 
             -- Query AI model (render + send + parse)
-            local keywords, err = queryModel(photo, folderHint, gpsInfo, SETTINGS, i)
+            local queryStart = LrDate.currentTime()
+            local keywords, rawResponse, err = queryModel(photo, folderHint, gpsInfo, SETTINGS, i)
+            local queryElapsed = LrDate.currentTime() - queryStart
+
+            -- Log prompt, raw response, and timing
+            log:log(string.format("  Prompt: %s", buildPrompt(SETTINGS, folderHint, gpsInfo):sub(1, 300)))
+            if rawResponse then
+                log:log(string.format("  Raw response: %s", rawResponse:sub(1, 500)))
+            end
+            log:log(string.format("  Query time: %.1fs", queryElapsed))
 
             if keywords then
                 -- Write keywords to catalog
