@@ -74,18 +74,24 @@ The plugin checks Ollama's status when you open Settings and shows whether it's 
 - **Choose a model** from the dropdown with install status indicators (✓ = installed)
 - **Install models** by clicking "Install in Terminal"
 
+<a id="ollama-models"></a>
+
 Recommended models for 24GB Apple Silicon:
 
 | Model | RAM | Best For |
 |---|---|---|
+| Gemma 3 4B | ~3GB | Popular, versatile vision model |
 | Qwen2.5-VL 3B | ~2GB | Fastest option, good quality for size |
 | MiniCPM-V 8B | ~5GB | Fast, strong at detail recognition |
 | Qwen2.5-VL 7B | ~5GB | Best local quality, accurate species IDs |
+| Qwen3-VL 8B | ~5GB | Next-gen Qwen vision |
+| Gemma 3 12B | ~8GB | High quality, strong all-rounder |
 | Llama 3.2 Vision 11B | ~8GB | Solid all-rounder |
-| LLaVA 13B | ~10GB | High quality, slow |
 | Moondream 2 | ~1GB | Tiny, fast, basic keywords only |
 
-> **Note:** Qwen2.5-VL models require Ollama 0.7.0 or newer.
+> **Note:** Qwen2.5-VL and Qwen3-VL models require Ollama 0.7.0 or newer.
+>
+> The model list updates automatically when you open Settings — no plugin update needed. You can also uninstall models directly from Settings to free disk space.
 
 ### Claude API Settings
 

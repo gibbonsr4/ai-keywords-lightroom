@@ -15,93 +15,66 @@ local LrView            = import 'LrView'
 
 local Prefs    = dofile(_PLUGIN.path .. '/Prefs.lua')
 local DEFAULTS = Prefs.DEFAULTS
-local json     = dofile(_PLUGIN.path .. '/dkjson.lua')
+local Engine   = dofile(_PLUGIN.path .. '/AIEngine.lua')
 
--- ── Recommended vision models for Ollama ──────────────────────────────────
-local VISION_MODELS = {
-    { value = "qwen2.5vl:3b",        label = "Qwen2.5-VL 3B",          info = "~2GB RAM  |  Fastest, good quality  |  Requires Ollama 0.7+" },
-    { value = "minicpm-v",            label = "MiniCPM-V 8B",           info = "~5GB RAM  |  Fast, strong detail recognition" },
-    { value = "qwen2.5vl:7b",        label = "Qwen2.5-VL 7B",          info = "~5GB RAM  |  Best local quality, accurate IDs  |  Requires Ollama 0.7+" },
-    { value = "llama3.2-vision:11b",  label = "Llama 3.2 Vision 11B",   info = "~8GB RAM  |  Solid all-rounder" },
-    { value = "llava:13b",            label = "LLaVA 13B",              info = "~10GB RAM  |  High quality, slow" },
-    { value = "moondream",            label = "Moondream 2",            info = "~1GB RAM  |  Tiny, fast, basic keywords only" },
-}
+-- Convenience aliases for Engine functions used throughout
+local isOllamaInstalled = Engine.isOllamaInstalled
+local getInstalledModels = Engine.getInstalledModels
+local isModelInstalled  = Engine.isModelInstalled
+local fetchRemoteModels = Engine.fetchRemoteModels
+local VISION_MODELS     = Engine.VISION_MODELS
 
--- ── Check if Ollama is installed on this Mac ─────────────────────────────
-local function isOllamaInstalled()
-    local appExists = LrFileUtils.exists("/Applications/Ollama.app")
-    if appExists then return true end
-    local exitCode = LrTasks.execute("which ollama >/dev/null 2>&1")
-    return exitCode == 0
-end
+-- ── Query Ollama version ────────────────────────────────────────────────
+local json = dofile(_PLUGIN.path .. '/dkjson.lua')
 
--- POSIX-safe shell escaping (defense-in-depth for temp file paths)
-local function shellEscape(s)
-    return "'" .. s:gsub("'", "'\\''") .. "'"
-end
+local function getOllamaVersion(ollamaUrl)
+    local tmpCfg = "/tmp/ai_kw_ver_cfg.txt"
+    local tmpOut = "/tmp/ai_kw_ver.json"
 
--- ── Query Ollama for installed models ─────────────────────────────────────
-local function getInstalledModels(ollamaUrl)
-    local installed = {}
-    local tmpCfg = "/tmp/ai_kw_tags_cfg.txt"
-    local tmpOut = "/tmp/ai_kw_tags.json"
-
-    -- Write curl config file to avoid interpolating ollamaUrl into shell command
     local cfh = io.open(tmpCfg, "w")
-    if not cfh then return installed, false end
+    if not cfh then return nil end
     cfh:write("-s\n")
-    cfh:write(string.format('url = "%s/api/tags"\n', ollamaUrl))
-    cfh:write("max-time = 5\n")
+    cfh:write(string.format('url = "%s/api/version"\n', ollamaUrl))
+    cfh:write("max-time = 3\n")
     cfh:close()
 
-    local cmd = string.format("curl -K %s -o %s", shellEscape(tmpCfg), shellEscape(tmpOut))
+    local cmd = string.format("curl -K %s -o %s",
+        Engine.shellEscape(tmpCfg), Engine.shellEscape(tmpOut))
     local exitCode = LrTasks.execute(cmd)
 
     if exitCode == 0 then
         local rf = io.open(tmpOut, "r")
         if rf then
-            local response = rf:read("*all")
+            local raw = rf:read("*all")
             rf:close()
             pcall(function() LrFileUtils.delete(tmpCfg) end)
             pcall(function() LrFileUtils.delete(tmpOut) end)
-            if response and response ~= "" then
-                local success, data = pcall(function() return json.decode(response) end)
-                if success and data and data.models then
-                    for _, m in ipairs(data.models) do
-                        installed[m.name] = true
-                        local base = m.name:match("^([^:]+)")
-                        if base then installed[base] = true end
-                        local withoutLatest = m.name:gsub(":latest$", "")
-                        installed[withoutLatest] = true
-                    end
+            if raw and raw ~= "" then
+                local ok, data = pcall(function() return json.decode(raw) end)
+                if ok and type(data) == "table" and data.version then
+                    return data.version
                 end
-                return installed, true
             end
         end
     end
 
     pcall(function() LrFileUtils.delete(tmpCfg) end)
     pcall(function() LrFileUtils.delete(tmpOut) end)
-    return installed, false
-end
-
--- ── Check if a specific model is installed ────────────────────────────────
-local function isModelInstalled(installed, modelValue)
-    if installed[modelValue] then return true end
-    local base = modelValue:match("^([^:]+)")
-    if base and installed[base] then return true end
-    return false
+    return nil
 end
 
 -- ── Build model dropdown items ────────────────────────────────────────────
-local function buildModelItems(installed, isRunning)
+local function buildModelItems(models, installed, isRunning)
     local items = {}
-    for _, m in ipairs(VISION_MODELS) do
+    -- Track which installed models are covered by the suggested list
+    local covered = {}
+    for _, m in ipairs(models) do
         local status
         if not isRunning then
             status = "  —  Ollama offline"
         elseif isModelInstalled(installed, m.value) then
             status = "  ✓"
+            covered[m.value] = true
         else
             status = "  —  not installed"
         end
@@ -110,15 +83,28 @@ local function buildModelItems(installed, isRunning)
             value = m.value,
         })
     end
+    -- Append installed models not in the suggested list (e.g. removed models)
+    if isRunning then
+        for tag, _ in pairs(installed) do
+            -- Only use fully-qualified tags (contain ":"), skip bare base names
+            if tag:find(":") and not covered[tag] then
+                table.insert(items, {
+                    title = tag .. "  ✓",
+                    value = tag,
+                })
+            end
+        end
+    end
     return items
 end
 
 -- ── Build Ollama status text ──────────────────────────────────────────────
-local function ollamaStatusText(isInstalled, isRunning)
+local function ollamaStatusText(isInstalled, isRunning, version)
     if not isInstalled then
         return "Ollama is not installed"
     elseif isRunning then
-        return "Ollama is running  ✓"
+        local ver = version and (" v" .. version) or ""
+        return "Ollama" .. ver .. " is running  ✓"
     else
         return "Ollama is not running"
     end
@@ -135,20 +121,44 @@ LrTasks.startAsyncTask(function()
         -- Check Ollama status
         local ollamaInstalled = isOllamaInstalled()
         local installed, ollamaRunning = getInstalledModels(current.ollamaUrl)
+        local ollamaVersion = ollamaRunning and getOllamaVersion(current.ollamaUrl) or nil
+
+        -- Fetch up-to-date model list (falls back to hardcoded)
+        local remoteModels = fetchRemoteModels()
+        local activeModels = remoteModels or VISION_MODELS
+
+        -- If the user's current model isn't in the active list, keep it
+        local found = false
+        for _, m in ipairs(activeModels) do
+            if m.value == current.model then found = true; break end
+        end
+        if not found then
+            table.insert(activeModels, {
+                value = current.model,
+                label = current.model,
+                info  = "Custom / unlisted model",
+            })
+        end
 
         -- Lookup model info by value
         local modelInfoMap = {}
-        for _, m in ipairs(VISION_MODELS) do
+        for _, m in ipairs(activeModels) do
             modelInfoMap[m.value] = m.info
+        end
+        -- Add info for installed models not in the suggested list
+        for tag, _ in pairs(installed) do
+            if tag:find(":") and not modelInfoMap[tag] then
+                modelInfoMap[tag] = "Installed but not in suggested model list — consider upgrading"
+            end
         end
 
         local props = LrBinding.makePropertyTable(context)
         props.provider         = current.provider
         props.ollamaUrl        = current.ollamaUrl
         props.model            = current.model
-        props.modelItems       = buildModelItems(installed, ollamaRunning)
+        props.modelItems       = buildModelItems(activeModels, installed, ollamaRunning)
         props.modelInfo        = modelInfoMap[current.model] or ""
-        props.ollamaStatus     = ollamaStatusText(ollamaInstalled, ollamaRunning)
+        props.ollamaStatus     = ollamaStatusText(ollamaInstalled, ollamaRunning, ollamaVersion)
         props.claudeApiKey     = current.claudeApiKey
         props.claudeModel      = current.claudeModel
         props.maxKeywords      = tostring(current.maxKeywords)
@@ -175,7 +185,7 @@ LrTasks.startAsyncTask(function()
 
         local function getInstallBtnTitle(inst, modelValue)
             if isModelInstalled(inst, modelValue) then
-                return "Model Installed  ✓"
+                return "Uninstall Model"
             else
                 return "Install in Terminal"
             end
@@ -183,26 +193,31 @@ LrTasks.startAsyncTask(function()
 
         props.ollamaActionTitle = getOllamaActionTitle(ollamaInstalled, ollamaRunning)
         props.installBtnTitle   = getInstallBtnTitle(installed, current.model)
-        props.installBtnEnabled = not isModelInstalled(installed, current.model)
 
         -- Update model info + install button when selection changes
         props:addObserver("model", function(_, _, newValue)
             props.modelInfo = modelInfoMap[newValue] or ""
             props.installBtnTitle = getInstallBtnTitle(props._installed, newValue)
-            props.installBtnEnabled = not isModelInstalled(props._installed, newValue)
         end)
 
         -- Helper to refresh Ollama state
         local function refreshOllamaState()
             local inst, running = getInstalledModels(props.ollamaUrl)
             local instld = isOllamaInstalled()
-            props.modelItems          = buildModelItems(inst, running)
-            props.ollamaStatus        = ollamaStatusText(instld, running)
+            local ver = running and getOllamaVersion(props.ollamaUrl) or nil
+            props.modelItems          = buildModelItems(activeModels, inst, running)
+            props.ollamaStatus        = ollamaStatusText(instld, running, ver)
             props.ollamaActionTitle   = getOllamaActionTitle(instld, running)
             props.installBtnTitle     = getInstallBtnTitle(inst, props.model)
-            props.installBtnEnabled   = not isModelInstalled(inst, props.model)
             props._installed          = inst
             props._ollamaRunning      = running
+            -- Rebuild info map so newly-installed or unlisted models get entries
+            for tag, _ in pairs(inst) do
+                if tag:find(":") and not modelInfoMap[tag] then
+                    modelInfoMap[tag] = "Installed but not in suggested model list — consider upgrading"
+                end
+            end
+            props.modelInfo = modelInfoMap[props.model] or ""
         end
 
         local contents = f:column {
@@ -287,16 +302,28 @@ LrTasks.startAsyncTask(function()
                     },
                     f:push_button {
                         title   = LrView.bind("installBtnTitle"),
-                        enabled = LrView.bind("installBtnEnabled"),
                         action  = function()
                             LrTasks.startAsyncTask(function()
-                                -- Model values come from VISION_MODELS dropdown but escape for safety
                                 local safeModel = props.model:gsub("[^%w%.%-%:_]", "")
-                                local cmd = string.format(
-                                    'osascript -e \'tell application "Terminal" to do script "ollama pull %s"\'',
-                                    safeModel
-                                )
-                                LrTasks.execute(cmd)
+                                if isModelInstalled(props._installed, props.model) then
+                                    -- Uninstall: use login shell so PATH includes /usr/local/bin
+                                    local cmd = string.format(
+                                        "/bin/zsh -lc 'ollama rm %s' >/dev/null 2>&1", safeModel
+                                    )
+                                    LrTasks.execute(cmd)
+                                else
+                                    -- Install: open Terminal so user can watch progress
+                                    local cmd = string.format(
+                                        "osascript"
+                                        .. " -e 'tell application \"Terminal\"'"
+                                        .. " -e 'activate'"
+                                        .. " -e 'do script \"ollama pull %s\"'"
+                                        .. " -e 'end tell'",
+                                        safeModel
+                                    )
+                                    LrTasks.execute(cmd)
+                                end
+                                refreshOllamaState()
                             end)
                         end,
                     },
@@ -310,6 +337,18 @@ LrTasks.startAsyncTask(function()
                         title           = LrView.bind("modelInfo"),
                         text_color      = LrView.kDisabledColor,
                         fill_horizontal = 1,
+                    },
+                },
+                f:row {
+                    f:static_text {
+                        title = "",
+                        width = LrView.share("label_width"),
+                    },
+                    f:push_button {
+                        title  = "Compare models on GitHub →",
+                        action = function()
+                            LrTasks.execute('open "https://github.com/gibbonsr4/ai-keywords-lightroom#ollama-models"')
+                        end,
                     },
                 },
             },
