@@ -6,8 +6,10 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 ## File Structure
 - `Info.lua` — LR plugin manifest, menu items, version
 - `Prefs.lua` — Preference defaults and getPrefs() loader. Pure data, no UI, no side effects. Safe to dofile().
+- `AIEngine.lua` — Shared AI inference engine. Image rendering, API calls (Ollama + Claude), keyword parsing, Ollama status checks. Used by GenerateKeywords.lua, CompareModels.lua, and Config.lua.
 - `Config.lua` — Settings dialog UI. Invoked via Library > Plugin Extras > Settings…
-- `GenerateKeywords.lua` — Main processing logic. Invoked via Library > Plugin Extras > Generate AI Keywords.
+- `GenerateKeywords.lua` — Main keyword generation logic. Invoked via Library > Plugin Extras > Generate AI Keywords.
+- `CompareModels.lua` — Model comparison tool. Runs 2–5 models on one photo without saving keywords. Invoked via Library > Plugin Extras > Compare Models.
 - `dkjson.lua` — Bundled JSON library (LR SDK has no built-in JSON)
 - `README.md` — User documentation
 

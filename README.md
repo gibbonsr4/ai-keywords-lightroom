@@ -44,6 +44,18 @@ Images are rendered via Lightroom's own export pipeline, so any format Lightroom
 4. Wait for the progress bar to complete
 5. Keywords appear in the **Keywording** panel
 
+### Compare Models
+
+Want to find the best model for your photos? Use the comparison tool:
+
+1. Select **one** photo in the Library
+2. **Library → Plug-in Extras → Compare Models — Selected Photo**
+3. Check 2–5 models to compare (installed Ollama models and/or Claude models)
+4. Optionally override the prompt for this comparison
+5. View side-by-side results with timing, keyword counts, and overlap analysis
+
+No keywords are saved — this is a preview-only tool for evaluating model quality and testing prompts.
+
 ---
 
 ## Configuration

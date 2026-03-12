@@ -1,0 +1,565 @@
+--[[
+  CompareModels.lua
+  ─────────────────────────────────────────────────────────────────────────────
+  Compare keyword output across multiple models without saving to catalog.
+  Select one photo, pick 2+ models, see side-by-side results.
+
+  Invoked via Library > Plugin Extras > Compare Models — Selected Photo
+--]]
+
+local LrApplication     = import 'LrApplication'
+local LrBinding         = import 'LrBinding'
+local LrDate            = import 'LrDate'
+local LrDialogs         = import 'LrDialogs'
+local LrFunctionContext = import 'LrFunctionContext'
+local LrPathUtils       = import 'LrPathUtils'
+local LrProgressScope   = import 'LrProgressScope'
+local LrTasks           = import 'LrTasks'
+local LrView            = import 'LrView'
+
+local Engine = dofile(_PLUGIN.path .. '/AIEngine.lua')
+local Prefs  = dofile(_PLUGIN.path .. '/Prefs.lua')
+
+-- ── Claude models available for comparison ────────────────────────────────
+local CLAUDE_MODELS = {
+    { value = "claude-haiku-4-5-20251001", label = "Claude Haiku 4.5",  cost = "~$0.002" },
+    { value = "claude-sonnet-4-6",         label = "Claude Sonnet 4.6", cost = "~$0.007" },
+}
+
+-- ── Build the model selection dialog ──────────────────────────────────────
+-- Returns a list of selected models [{provider, model, label}] or nil if canceled.
+local function showSelectionDialog(photo, settings)
+    local f       = LrView.osFactory()
+    local catalog = LrApplication.activeCatalog()
+
+    -- Check Ollama status
+    local installed, ollamaRunning = Engine.getInstalledModels(settings.ollamaUrl)
+
+    -- Get up-to-date model list
+    local remoteModels = Engine.fetchRemoteModels()
+    local activeModels = remoteModels or Engine.VISION_MODELS
+
+    -- If user's current model isn't in the list, add it
+    local found = false
+    for _, m in ipairs(activeModels) do
+        if m.value == settings.model then found = true; break end
+    end
+    if not found then
+        table.insert(activeModels, {
+            value = settings.model,
+            label = settings.model,
+            info  = "Current model (custom)",
+        })
+    end
+
+    -- Build list of available models for comparison
+    local availableModels = {}
+
+    -- Ollama models (only installed ones)
+    if ollamaRunning then
+        for _, m in ipairs(activeModels) do
+            if Engine.isModelInstalled(installed, m.value) then
+                table.insert(availableModels, {
+                    provider = "ollama",
+                    model    = m.value,
+                    label    = m.label,
+                    detail   = m.info or "",
+                })
+            end
+        end
+    end
+
+    -- Claude models (only if API key is configured)
+    local hasApiKey = settings.claudeApiKey and settings.claudeApiKey ~= ""
+    if hasApiKey then
+        for _, cm in ipairs(CLAUDE_MODELS) do
+            table.insert(availableModels, {
+                provider = "claude",
+                model    = cm.value,
+                label    = cm.label,
+                detail   = cm.cost .. "/image",
+            })
+        end
+    end
+
+    if #availableModels < 2 then
+        local msg = "Need at least 2 models to compare.\n\n"
+        if not ollamaRunning then
+            msg = msg .. "• Ollama is not running — start it to compare local models.\n"
+        else
+            local installedCount = 0
+            for _, m in ipairs(activeModels) do
+                if Engine.isModelInstalled(installed, m.value) then
+                    installedCount = installedCount + 1
+                end
+            end
+            if installedCount < 1 then
+                msg = msg .. "• No Ollama vision models installed — install one from Settings.\n"
+            end
+        end
+        if not hasApiKey then
+            msg = msg .. "• No Claude API key configured — add one in Settings.\n"
+        end
+        LrDialogs.message("Compare Models", msg, "warning")
+        return nil
+    end
+
+    -- Create property table for dialog
+    return LrFunctionContext.callWithContext("CompareSelection", function(context)
+        local props = LrBinding.makePropertyTable(context)
+
+        -- Create a checkbox property for each model
+        -- Default: check user's current model + first Claude model
+        for i, m in ipairs(availableModels) do
+            local key = "sel_" .. i
+            local isCurrentOllama = (m.provider == "ollama" and m.model == settings.model)
+            local isCurrentClaude = (m.provider == "claude" and m.model == settings.claudeModel)
+            props[key] = isCurrentOllama or isCurrentClaude
+        end
+
+        -- Prompt override
+        props.useCustomPrompt = false
+        props.customPrompt    = settings.prompt
+
+        -- Photo info
+        local path     = photo:getRawMetadata('path')
+        local filename = LrPathUtils.leafName(path)
+
+        -- Build checkbox rows grouped by provider
+        local ollamaRows = {}
+        local claudeRows = {}
+
+        for i, m in ipairs(availableModels) do
+            local key = "sel_" .. i
+            local row = f:row {
+                f:checkbox {
+                    title = m.label,
+                    value = LrView.bind(key),
+                    width = 200,
+                },
+                f:static_text {
+                    title      = m.detail,
+                    text_color = LrView.kDisabledColor,
+                },
+            }
+            if m.provider == "ollama" then
+                table.insert(ollamaRows, row)
+            else
+                table.insert(claudeRows, row)
+            end
+        end
+
+        -- Build the dialog contents
+        local sections = {
+            spacing         = f:dialog_spacing(),
+            fill_horizontal = 1,
+            bind_to_object  = props,
+
+            -- Photo info
+            f:row {
+                f:static_text {
+                    title     = "Photo:",
+                    width     = 80,
+                    alignment = "right",
+                },
+                f:static_text {
+                    title           = filename,
+                    font            = "<system/bold>",
+                    fill_horizontal = 1,
+                },
+            },
+
+            f:separator { fill_horizontal = 1 },
+        }
+
+        -- Ollama section
+        if #ollamaRows > 0 then
+            local ollamaGroup = {
+                title           = "Ollama Models (installed)",
+                fill_horizontal = 1,
+            }
+            for _, row in ipairs(ollamaRows) do
+                table.insert(ollamaGroup, row)
+            end
+            table.insert(sections, f:group_box(ollamaGroup))
+        end
+
+        -- Claude section
+        if #claudeRows > 0 then
+            local claudeGroup = {
+                title           = "Claude API",
+                fill_horizontal = 1,
+            }
+            for _, row in ipairs(claudeRows) do
+                table.insert(claudeGroup, row)
+            end
+            table.insert(sections, f:group_box(claudeGroup))
+        end
+
+        -- Prompt override
+        table.insert(sections, f:separator { fill_horizontal = 1 })
+        table.insert(sections, f:row {
+            f:static_text {
+                title = "",
+                width = 80,
+            },
+            f:checkbox {
+                title = "Use a different prompt for this comparison",
+                value = LrView.bind("useCustomPrompt"),
+            },
+        })
+        table.insert(sections, f:row {
+            f:static_text {
+                title     = "Prompt:",
+                width     = 80,
+                alignment = "right",
+            },
+            f:edit_field {
+                value           = LrView.bind("customPrompt"),
+                enabled         = LrView.bind("useCustomPrompt"),
+                width_in_chars  = 55,
+                height_in_lines = 5,
+            },
+        })
+
+        -- Validation message
+        table.insert(sections, f:row {
+            f:static_text {
+                title = "",
+                width = 80,
+            },
+            f:static_text {
+                title      = "Select 2–5 models, then click Compare.",
+                text_color = LrView.kDisabledColor,
+            },
+        })
+
+        local contents = f:column(sections)
+
+        local result = LrDialogs.presentModalDialog {
+            title      = "Compare Models",
+            contents   = contents,
+            actionVerb = "Compare",
+            actionBinding = {
+                enabled = {
+                    bind_to_object = props,
+                    keys = (function()
+                        local keys = {}
+                        for i = 1, #availableModels do
+                            table.insert(keys, "sel_" .. i)
+                        end
+                        return keys
+                    end)(),
+                    operation = function()
+                        local count = 0
+                        for i = 1, #availableModels do
+                            if props["sel_" .. i] then count = count + 1 end
+                        end
+                        return count >= 2 and count <= 5
+                    end,
+                },
+            },
+        }
+
+        if result ~= "ok" then return nil end
+
+        -- Build list of selected models
+        local selected = {}
+        for i, m in ipairs(availableModels) do
+            if props["sel_" .. i] then
+                table.insert(selected, {
+                    provider = m.provider,
+                    model    = m.model,
+                    label    = m.label,
+                })
+            end
+        end
+
+        -- Apply custom prompt if enabled
+        local promptOverride = nil
+        if props.useCustomPrompt then
+            promptOverride = props.customPrompt
+        end
+
+        return selected, promptOverride
+    end)
+end
+
+-- ── Run comparison and collect results ────────────────────────────────────
+local function runComparison(photo, selectedModels, settings, promptOverride, context)
+    local catalog = LrApplication.activeCatalog()
+
+    -- Build folder hint and GPS info (same as normal keyword generation)
+    local folderAliases = Engine.parseAliases(settings.folderAliases)
+    local folderHint = nil
+    if settings.useFolderContext then
+        local parts = Engine.getFolderContext(photo, catalog, folderAliases)
+        if #parts > 0 then
+            folderHint = table.concat(parts, " > ")
+        end
+    end
+
+    local gpsInfo = nil
+    local gps = photo:getRawMetadata('gps')
+    if gps and gps.latitude and gps.longitude then
+        gpsInfo = { latitude = gps.latitude, longitude = gps.longitude }
+    end
+
+    -- Build prompt (using override if provided)
+    local promptSettings = {
+        prompt      = promptOverride or settings.prompt,
+        maxKeywords = settings.maxKeywords,
+    }
+    local prompt = Engine.buildPrompt(promptSettings, folderHint, gpsInfo)
+
+    -- Pre-render images (once per provider type to avoid redundant renders)
+    local hasOllama, hasClaude = false, false
+    for _, m in ipairs(selectedModels) do
+        if m.provider == "ollama" then hasOllama = true end
+        if m.provider == "claude" then hasClaude = true end
+    end
+
+    local progress = LrProgressScope({
+        title           = "Compare Models — rendering image…",
+        functionContext = context,
+    })
+
+    local ollamaImg, claudeImg
+    local ollamaImgErr, claudeImgErr
+
+    if hasOllama then
+        local ts = tostring(math.floor(LrDate.currentTime() * 1000)) .. "_cmp_oll"
+        ollamaImg, ollamaImgErr = Engine.prepareImage(photo, ts, "ollama")
+    end
+    if hasClaude then
+        local ts = tostring(math.floor(LrDate.currentTime() * 1000)) .. "_cmp_cla"
+        claudeImg, claudeImgErr = Engine.prepareImage(photo, ts, "claude")
+    end
+
+    -- Run each model sequentially
+    local results = {}
+    for i, m in ipairs(selectedModels) do
+        if progress:isCanceled() then break end
+
+        progress:setPortionComplete(i - 1, #selectedModels)
+        progress:setCaption(string.format("[%d/%d] %s…", i, #selectedModels, m.label))
+
+        local img = (m.provider == "claude") and claudeImg or ollamaImg
+        local imgErr = (m.provider == "claude") and claudeImgErr or ollamaImgErr
+
+        local entry = {
+            label    = m.label,
+            provider = m.provider,
+            model    = m.model,
+            keywords = {},
+            raw      = "",
+            elapsed  = 0,
+            error    = nil,
+        }
+
+        if not img then
+            entry.error = imgErr or "Could not prepare image"
+        else
+            local queryStart = LrDate.currentTime()
+            local raw, err
+
+            if m.provider == "claude" then
+                raw, err = Engine.queryClaude(
+                    img, prompt, m.model, settings.claudeApiKey, settings.timeoutSecs
+                )
+            else
+                raw, err = Engine.queryOllama(
+                    img, prompt, m.model, settings.ollamaUrl, settings.timeoutSecs
+                )
+            end
+
+            entry.elapsed = LrDate.currentTime() - queryStart
+
+            if raw then
+                entry.raw = raw
+                entry.keywords = Engine.parseKeywords(raw, settings)
+                if #entry.keywords == 0 then
+                    entry.error = "No parseable keywords"
+                end
+            else
+                entry.error = err or "Unknown error"
+            end
+        end
+
+        table.insert(results, entry)
+        LrTasks.sleep(0.05)
+    end
+
+    progress:done()
+    return results
+end
+
+-- ── Show results dialog ──────────────────────────────────────────────────
+local function showResults(photo, results, promptOverride)
+    local f = LrView.osFactory()
+
+    local path     = photo:getRawMetadata('path')
+    local filename = LrPathUtils.leafName(path)
+
+    -- Build a column for each model's results
+    local columns = {}
+    for _, r in ipairs(results) do
+        local kwText
+        if r.error then
+            kwText = "⚠ " .. r.error
+        elseif #r.keywords > 0 then
+            kwText = table.concat(r.keywords, "\n")
+        else
+            kwText = "(no keywords)"
+        end
+
+        local headerColor = r.error and LrView.kWarningColor or nil
+        local kwCount = r.error and "" or string.format("  (%d keywords)", #r.keywords)
+
+        table.insert(columns, f:column {
+            spacing = f:control_spacing(),
+            width   = 200,
+
+            f:static_text {
+                title      = r.label,
+                font       = "<system/bold>",
+                text_color = headerColor,
+            },
+            f:static_text {
+                title      = string.format("%.1fs%s", r.elapsed, kwCount),
+                text_color = LrView.kDisabledColor,
+            },
+            f:separator { fill_horizontal = 1 },
+            f:static_text {
+                title       = kwText,
+                height_in_lines = math.max(5, math.min(25, #r.keywords + 1)),
+                width       = 190,
+            },
+        })
+    end
+
+    -- Keyword overlap analysis
+    local allKeywords = {}  -- keyword -> list of model labels
+    for _, r in ipairs(results) do
+        if not r.error then
+            for _, kw in ipairs(r.keywords) do
+                local key = kw:lower()
+                if not allKeywords[key] then allKeywords[key] = {} end
+                table.insert(allKeywords[key], r.label)
+            end
+        end
+    end
+
+    -- Find shared keywords (appear in 2+ models)
+    local shared = {}
+    for kw, models in pairs(allKeywords) do
+        if #models >= 2 then
+            table.insert(shared, kw)
+        end
+    end
+    table.sort(shared)
+
+    local sharedText = #shared > 0
+        and ("Shared across 2+ models: " .. table.concat(shared, ", "))
+        or "No keywords shared between models."
+
+    -- Build prompt info
+    local promptInfo = promptOverride
+        and "Custom prompt used for this comparison."
+        or "Default prompt from Settings."
+
+    local contents = f:column {
+        spacing         = f:dialog_spacing(),
+        fill_horizontal = 1,
+
+        -- Photo info
+        f:row {
+            f:static_text {
+                title = "Photo:  ",
+            },
+            f:static_text {
+                title = filename,
+                font  = "<system/bold>",
+            },
+        },
+        f:static_text {
+            title      = promptInfo,
+            text_color = LrView.kDisabledColor,
+        },
+
+        f:separator { fill_horizontal = 1 },
+
+        -- Model results side by side
+        f:scrolled_view {
+            horizontal_scroller = true,
+            width               = math.min(210 * #results, 1050),
+            height              = 400,
+            f:row(columns),
+        },
+
+        f:separator { fill_horizontal = 1 },
+
+        -- Overlap analysis
+        f:static_text {
+            title           = sharedText,
+            text_color      = LrView.kDisabledColor,
+            fill_horizontal = 1,
+            height_in_lines = 2,
+        },
+    }
+
+    LrDialogs.presentModalDialog {
+        title      = "Compare Models — Results",
+        contents   = contents,
+        actionVerb = "Done",
+        cancelVerb = "< exclude",
+    }
+end
+
+-- ── Entry point ──────────────────────────────────────────────────────────
+LrTasks.startAsyncTask(function()
+    LrFunctionContext.callWithContext("AICompareModels", function(context)
+
+        local SETTINGS = Prefs.getPrefs()
+        local catalog  = LrApplication.activeCatalog()
+        local targetPhotos = catalog:getTargetPhotos()
+
+        -- Must select exactly one photo
+        if #targetPhotos == 0 then
+            LrDialogs.message("Compare Models",
+                "No photo selected.\n\nSelect one photo in the Library grid and try again.", "info")
+            return
+        end
+        if #targetPhotos > 1 then
+            LrDialogs.message("Compare Models",
+                "Please select exactly one photo for comparison.\n\n" ..
+                "The comparison runs each selected model on the same image " ..
+                "so you can compare keyword quality side by side.", "info")
+            return
+        end
+
+        local photo = targetPhotos[1]
+
+        -- Check file type
+        local path = photo:getRawMetadata('path')
+        if not Engine.SUPPORTED_EXTS[Engine.getExt(path)] then
+            LrDialogs.message("Compare Models",
+                "Unsupported file type: " .. Engine.getExt(path) .. "\n\n" ..
+                "Supported: JPEG, PNG, TIFF, WEBP, HEIC, RAW.", "warning")
+            return
+        end
+
+        -- Show model selection dialog
+        local selectedModels, promptOverride = showSelectionDialog(photo, SETTINGS)
+        if not selectedModels then return end
+
+        -- Run comparison
+        local results = runComparison(photo, selectedModels, SETTINGS, promptOverride, context)
+
+        -- Show results
+        if #results > 0 then
+            showResults(photo, results, promptOverride)
+        end
+
+    end)
+end)

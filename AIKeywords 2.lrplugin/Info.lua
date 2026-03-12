@@ -18,6 +18,10 @@ return {
             file  = 'GenerateKeywords.lua',
         },
         {
+            title = 'Compare Models — Selected Photo',
+            file  = 'CompareModels.lua',
+        },
+        {
             title = 'Settings\226\128\166',   -- "Settings…" with ellipsis
             file  = 'Config.lua',
         },
