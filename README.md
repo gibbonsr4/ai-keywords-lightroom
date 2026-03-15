@@ -1,6 +1,6 @@
 # AI Keywords — Lightroom Classic Plugin
 
-Automatically generates and applies searchable keywords to selected photos using either a **local Ollama vision model** or the **Claude API**. Your choice of free local processing or higher-quality cloud results.
+Automatically generates and applies searchable keywords to selected photos using **local Ollama vision models** or **cloud APIs** (Claude, OpenAI, Gemini). Your choice of free local processing or higher-quality cloud results.
 
 **macOS only** — optimized for Apple Silicon.
 
@@ -17,8 +17,10 @@ Automatically generates and applies searchable keywords to selected photos using
 - [Ollama](https://ollama.com) installed and running
 - A vision model (install from within Settings or via `ollama pull <model>`)
 
-**For Claude API:**
-- An Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
+**For cloud providers (any or all):**
+- **Claude API:** An Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
+- **OpenAI:** An API key from [platform.openai.com](https://platform.openai.com)
+- **Gemini:** A Google AI API key from [aistudio.google.com](https://aistudio.google.com)
 
 ### Supported File Types
 JPEG, PNG, TIFF, WEBP, HEIC/HEIF, and all RAW formats supported by Lightroom (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, PEF, SRW).
@@ -38,7 +40,7 @@ Images are rendered via Lightroom's own export pipeline, so any format Lightroom
 
 ## Usage
 
-1. Open Settings and choose your provider (Ollama or Claude API)
+1. Open Settings and choose your provider (Ollama, Claude, OpenAI, or Gemini)
 2. In Lightroom Library, select one or more photos
 3. **Library → Plug-in Extras → Generate AI Keywords — Selected Photos**
 4. Wait for the progress bar to complete
@@ -50,7 +52,7 @@ Want to find the best model for your photos? Use the comparison tool:
 
 1. Select **one** photo in the Library
 2. **Library → Plug-in Extras → Compare Models — Selected Photo**
-3. Check 2–5 models to compare (installed Ollama models and/or Claude models)
+3. Check 2–5 models to compare (Ollama, Claude, OpenAI, and/or Gemini models)
 4. Optionally override the prompt for this comparison
 5. View side-by-side results with timing, keyword counts, and overlap analysis
 
@@ -64,7 +66,7 @@ Open **Library → Plug-in Extras → Settings…** to configure. The Save butto
 
 ### Provider
 
-Choose between **Ollama (local)** and **Claude API (cloud)** via radio buttons.
+Choose between **Ollama (local)**, **Claude API**, **OpenAI**, and **Gemini** via radio buttons.
 
 ### Ollama Settings
 
@@ -100,12 +102,26 @@ Recommended models for 24GB Apple Silicon:
 | API Key | Your Anthropic API key |
 | Model | Haiku 4.5 (~$0.002/image) or Sonnet 4.6 (~$0.007/image) |
 
+### OpenAI Settings
+
+| Setting | Notes |
+|---|---|
+| API Key | Your OpenAI API key |
+| Model | GPT-4o Mini (~$0.001/image) or GPT-4o (~$0.005/image) |
+
+### Gemini Settings
+
+| Setting | Notes |
+|---|---|
+| API Key | Your Google AI API key |
+| Model | Gemini 2.0 Flash (~$0.0005/image), 2.5 Flash (~$0.001/image), or 2.5 Pro (~$0.005/image) |
+
 ### Keyword Settings
 
 | Setting | Default | Notes |
 |---|---|---|
 | Max keywords | 20 | Per photo, 1–50. Also communicated to the model in the prompt. |
-| Keyword case | As returned | Options: As returned, lowercase, Title Case |
+| Keyword case | lowercase | Options: As returned, lowercase, Title Case |
 | Timeout | 90 seconds | Per image |
 | Parent keyword | (blank) | See below |
 | Skip keyworded | Off | Skip photos that already have keywords |
@@ -127,21 +143,20 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 
 - **Folder context:** When enabled, catalog folder names (e.g. `Dominican Republic > Santo Domingo`) are passed to the model as location hints. Generic folder names like "Photos" and "Imports" are filtered out.
 - **Folder aliases:** Expand short folder names (e.g. `DR=Dominican Republic; CR=Costa Rica`).
-- **Prompt:** Fully customizable. Click "Reset to default prompt" to restore the built-in prompt.
+- **Custom instructions:** Optional additional prompt instructions for domain-specific guidance (e.g. "Focus on architecture and design elements"). The built-in base prompt handles keyword style automatically.
 
 ---
 
-## Ollama vs Claude: When to Use Each
+## Choosing a Provider
 
-| | Ollama | Claude API |
-|---|---|---|
-| Cost | Free | ~$0.002–0.007/image |
-| Speed | 4–20s/image (Apple Silicon) | 2–5s/image |
-| Quality | Good for general keywords | Better species ID, more consistent |
-| Privacy | Images never leave your machine | Images sent to Anthropic |
-| Batch (25k) | Free, hours to days | ~$50–170, much faster |
+| | Ollama | Claude | OpenAI | Gemini |
+|---|---|---|---|---|
+| Cost | Free | $0.002–0.007/image | $0.001–0.005/image | $0.0005–0.005/image |
+| Speed | 4–20s (Apple Silicon) | ~2s | ~2s | ~2s |
+| Quality | Good general keywords | Excellent, best landmark ID | Very good | Very good |
+| Privacy | Local, nothing leaves your machine | Cloud | Cloud | Cloud |
 
-**Recommendation:** Use Ollama for casual tagging and testing. Use Claude API (Haiku) for large batch runs where quality and speed matter.
+**Recommendation:** Ollama for casual tagging and privacy. Claude Sonnet for accuracy-critical runs. Gemini 2.0 Flash for cheapest cloud option. Use Compare Models to test which works best for your photos.
 
 ---
 
@@ -162,7 +177,7 @@ Log files are saved to the configured folder (default: `~/Documents`).
 ## Performance
 
 - **Ollama:** ~4–20 seconds per image depending on model and hardware
-- **Claude API:** ~2–5 seconds per image
+- **Cloud providers:** ~2–5 seconds per image
 - Keywords are written incrementally — safe to cancel and resume
 - "Skip keyworded" avoids re-processing already-tagged photos
 
@@ -175,5 +190,6 @@ Log files are saved to the configured folder (default: `~/Documents`).
 **Ollama: Timeout / curl exit 28** → Increase timeout in Settings.
 **Ollama: "Could not connect"** → Start Ollama from Settings or run `ollama serve` in Terminal.
 **Claude: "API error"** → Check your API key and account balance at console.anthropic.com.
+**OpenAI: "API error"** → Check your API key at platform.openai.com.
+**Gemini: "API error"** → Check your API key at aistudio.google.com.
 **Keywords not appearing under parent** → See note above about existing root-level keywords.
-**Old prompt after upgrade** → Open Settings → "Reset to default prompt".

@@ -136,20 +136,13 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - macOS (Apple Silicon M5 MacBook Pro, 24GB)
 - Lightroom Classic (current version)
 - Ollama 0.7+ for Qwen2.5-VL models
-- Claude API key required for cloud provider
+- API keys required for cloud providers (Claude, OpenAI, Gemini)
 
 ## Roadmap & Future Development
-See ROADMAP.md for the full feature roadmap including:
-- Metadata expansion (titles, descriptions, alt text)
-- Controlled vocabulary / keyword matching
-- Hierarchical keyword generation
-- ~~Additional providers~~ ✓ (Ollama, Claude, OpenAI, Gemini)
-- Semantic search (major feature, separate architecture)
-- Batch API support
-- Keyword best practices integration
+See ROADMAP.md for high-level vision and GitHub Issues #1-#7 for task details.
 
 ## Competitive Context
 Main competitor: LrGeniusAI (free, open source)
 - They have: semantic search, titles/descriptions, 4 providers, backend server
-- We have: Claude API, GPS context, folder aliases, simpler install (no backend)
+- We have: 4 AI providers, GPS context, folder aliases, simpler install (no backend)
 - See ROADMAP.md for full competitive analysis
