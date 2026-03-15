@@ -161,6 +161,10 @@ LrTasks.startAsyncTask(function()
         props.ollamaStatus     = ollamaStatusText(ollamaInstalled, ollamaRunning, ollamaVersion)
         props.claudeApiKey     = current.claudeApiKey
         props.claudeModel      = current.claudeModel
+        props.openaiApiKey     = current.openaiApiKey
+        props.openaiModel      = current.openaiModel
+        props.geminiApiKey     = current.geminiApiKey
+        props.geminiModel      = current.geminiModel
         props.maxKeywords      = tostring(current.maxKeywords)
         props.timeoutSecs      = tostring(current.timeoutSecs)
         props.useFolderContext = current.useFolderContext
@@ -243,6 +247,16 @@ LrTasks.startAsyncTask(function()
                     title         = "Claude API (cloud)",
                     value         = LrView.bind("provider"),
                     checked_value = "claude",
+                },
+                f:radio_button {
+                    title         = "OpenAI (cloud)",
+                    value         = LrView.bind("provider"),
+                    checked_value = "openai",
+                },
+                f:radio_button {
+                    title         = "Gemini (cloud)",
+                    value         = LrView.bind("provider"),
+                    checked_value = "gemini",
                 },
             },
 
@@ -366,8 +380,9 @@ LrTasks.startAsyncTask(function()
                         alignment = "right",
                     },
                     f:edit_field {
-                        value          = LrView.bind("claudeApiKey"),
-                        width_in_chars = 55,
+                        value           = LrView.bind("claudeApiKey"),
+                        width_in_chars  = 55,
+                        height_in_lines = 2,
                     },
                 },
                 f:row {
@@ -391,6 +406,95 @@ LrTasks.startAsyncTask(function()
                     },
                     f:static_text {
                         title      = "Get your API key at console.anthropic.com",
+                        text_color = LrView.kDisabledColor,
+                    },
+                },
+            },
+
+            -- ═══════════════════════════════════════════════════════════
+            -- OPENAI API
+            -- ═══════════════════════════════════════════════════════════
+            f:group_box {
+                title           = "OpenAI API",
+                fill_horizontal = 1,
+                f:row {
+                    f:static_text {
+                        title     = "API Key:",
+                        width     = LrView.share("label_width"),
+                        alignment = "right",
+                    },
+                    f:edit_field {
+                        value           = LrView.bind("openaiApiKey"),
+                        width_in_chars  = 55,
+                        height_in_lines = 2,
+                    },
+                },
+                f:row {
+                    f:static_text {
+                        title     = "Model:",
+                        width     = LrView.share("label_width"),
+                        alignment = "right",
+                    },
+                    f:popup_menu {
+                        value = LrView.bind("openaiModel"),
+                        items = {
+                            { title = "GPT-4o Mini (~$0.001/image)",  value = "gpt-4o-mini" },
+                            { title = "GPT-4o (~$0.005/image)",       value = "gpt-4o" },
+                        },
+                    },
+                },
+                f:row {
+                    f:static_text {
+                        title = "",
+                        width = LrView.share("label_width"),
+                    },
+                    f:static_text {
+                        title      = "Get your API key at platform.openai.com",
+                        text_color = LrView.kDisabledColor,
+                    },
+                },
+            },
+
+            -- ═══════════════════════════════════════════════════════════
+            -- GEMINI API
+            -- ═══════════════════════════════════════════════════════════
+            f:group_box {
+                title           = "Gemini API",
+                fill_horizontal = 1,
+                f:row {
+                    f:static_text {
+                        title     = "API Key:",
+                        width     = LrView.share("label_width"),
+                        alignment = "right",
+                    },
+                    f:edit_field {
+                        value           = LrView.bind("geminiApiKey"),
+                        width_in_chars  = 55,
+                        height_in_lines = 2,
+                    },
+                },
+                f:row {
+                    f:static_text {
+                        title     = "Model:",
+                        width     = LrView.share("label_width"),
+                        alignment = "right",
+                    },
+                    f:popup_menu {
+                        value = LrView.bind("geminiModel"),
+                        items = {
+                            { title = "Gemini 2.0 Flash (~$0.0005/image)",  value = "gemini-2.0-flash" },
+                            { title = "Gemini 2.5 Flash (~$0.001/image)",   value = "gemini-2.5-flash" },
+                            { title = "Gemini 2.5 Pro (~$0.005/image)",     value = "gemini-2.5-pro" },
+                        },
+                    },
+                },
+                f:row {
+                    f:static_text {
+                        title = "",
+                        width = LrView.share("label_width"),
+                    },
+                    f:static_text {
+                        title      = "Get your API key at aistudio.google.com",
                         text_color = LrView.kDisabledColor,
                     },
                 },
@@ -527,24 +631,15 @@ LrTasks.startAsyncTask(function()
                 },
                 f:row {
                     f:static_text {
-                        title     = "Prompt:",
+                        title     = "Custom instructions:",
                         width     = LrView.share("label_width"),
                         alignment = "right",
                     },
                     f:edit_field {
                         value           = LrView.bind("prompt"),
                         width_in_chars  = 55,
-                        height_in_lines = 8,
-                    },
-                },
-                f:row {
-                    f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
-                    },
-                    f:push_button {
-                        title  = "Reset to default prompt",
-                        action = function() props.prompt = DEFAULTS.prompt end,
+                        height_in_lines = 4,
+                        placeholder_string = "Optional — e.g. Focus on architecture and design elements",
                     },
                 },
                 f:row {
@@ -553,7 +648,9 @@ LrTasks.startAsyncTask(function()
                         width = LrView.share("label_width"),
                     },
                     f:static_text {
-                        title      = "Focus on what to identify — output format instruction is added automatically.",
+                        title      = "The base prompt already handles keyword style (atomic, singular,\n" ..
+                                     "composition, colors, etc.). Use this for domain-specific guidance.\n" ..
+                                     "Leave blank for general-purpose keywording.",
                         text_color = LrView.kDisabledColor,
                     },
                 },
@@ -652,6 +749,12 @@ LrTasks.startAsyncTask(function()
             if values.provider == "claude" and (values.claudeApiKey == nil or values.claudeApiKey == "") then
                 return false, "Claude API selected — enter your Anthropic API key."
             end
+            if values.provider == "openai" and (values.openaiApiKey == nil or values.openaiApiKey == "") then
+                return false, "OpenAI selected — enter your OpenAI API key."
+            end
+            if values.provider == "gemini" and (values.geminiApiKey == nil or values.geminiApiKey == "") then
+                return false, "Gemini selected — enter your Google AI API key."
+            end
             local url = values.ollamaUrl or ""
             if values.provider == "ollama" and not url:match("^https?://") then
                 return false, "Ollama URL must start with http:// or https://"
@@ -671,7 +774,7 @@ LrTasks.startAsyncTask(function()
             actionBinding = {
                 enabled = {
                     bind_to_object = props,
-                    keys = { "maxKeywords", "timeoutSecs", "claudeApiKey", "provider", "ollamaUrl" },
+                    keys = { "maxKeywords", "timeoutSecs", "claudeApiKey", "openaiApiKey", "geminiApiKey", "provider", "ollamaUrl" },
                     operation = function(_, values)
                         local isValid, validMsg = validateSettings(values)
                         props.validationMessage = validMsg
@@ -690,6 +793,10 @@ LrTasks.startAsyncTask(function()
             prefs.model            = props.model
             prefs.claudeApiKey     = props.claudeApiKey
             prefs.claudeModel      = props.claudeModel
+            prefs.openaiApiKey     = props.openaiApiKey
+            prefs.openaiModel      = props.openaiModel
+            prefs.geminiApiKey     = props.geminiApiKey
+            prefs.geminiModel      = props.geminiModel
             prefs.maxKeywords      = math.floor(maxKw)
             prefs.timeoutSecs      = math.floor(timeout)
             prefs.useFolderContext = props.useFolderContext

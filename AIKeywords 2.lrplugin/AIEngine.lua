@@ -356,16 +356,16 @@ function M.prepareImage(photo, ts, provider)
     -- Provider-appropriate render size:
     -- Claude: 1568px per Anthropic's recommendation for best accuracy
     -- Ollama: 1024px (local models work well at this size)
-    local renderDim = (provider == "claude") and 1568 or 1024
+    local renderDim = (provider == "ollama") and 1024 or 1568
 
     local renderedPath, renderedSize = M.renderImage(photo, ts, renderDim)
 
-    -- For Claude: retry at smaller sizes if too large for API
-    if provider == "claude" and renderedPath and renderedSize > M.CLAUDE_MAX_RAW_BYTES then
+    -- For cloud providers: retry at smaller sizes if too large for API
+    if provider ~= "ollama" and renderedPath and renderedSize > M.CLAUDE_MAX_RAW_BYTES then
         M.safeDelete(renderedPath)
         renderedPath, renderedSize = M.renderImage(photo, ts .. "_sm", 1024)
     end
-    if provider == "claude" and renderedPath and renderedSize > M.CLAUDE_MAX_RAW_BYTES then
+    if provider ~= "ollama" and renderedPath and renderedSize > M.CLAUDE_MAX_RAW_BYTES then
         M.safeDelete(renderedPath)
         renderedPath, renderedSize = M.renderImage(photo, ts .. "_xs", 768)
     end
@@ -381,11 +381,11 @@ function M.prepareImage(photo, ts, provider)
         return nil, "Cannot read rendered file"
     end
 
-    -- Final size check for Claude
-    if provider == "claude" and #imageData > M.CLAUDE_MAX_RAW_BYTES then
+    -- Final size check for cloud providers
+    if provider ~= "ollama" and #imageData > M.CLAUDE_MAX_RAW_BYTES then
         return nil, string.format(
-            "Image too large for Claude API (%.1f MB). Try exporting a smaller JPEG.",
-            #imageData / 1048576
+            "Image too large for %s API (%.1f MB). Try exporting a smaller JPEG.",
+            provider, #imageData / 1048576
         )
     end
 
@@ -395,9 +395,33 @@ function M.prepareImage(photo, ts, provider)
     }, nil
 end
 
+-- ── Base keywording prompt (not user-editable) ────────────────────────────
+-- Contains keyword style rules, best practices, and guardrails based on
+-- stock photography standards. User customization goes in settings.prompt.
+M.BASE_PROMPT =
+    "Analyze this photo and return keywords ordered by relevance. " ..
+    "Use singular nouns (boat, tree, cloud) and gerund verbs (running, cooking, swimming). " ..
+    "Prefer atomic, single-concept keywords. " ..
+    "Use multi-word keywords only for established terms or proper nouns " ..
+    "(e.g. golden hour, fire pit, copy space, New York). " ..
+    "Do not combine adjective+noun when they work as separate keywords " ..
+    "(e.g. 'boat' and 'anchor' not 'anchored boat', 'coast' and 'cliff' not 'coastal cliff'). " ..
+    "Include: subjects, setting, dominant colors, mood or emotion when genuinely conveyed, " ..
+    "and composition terms (e.g. copy space, close-up, aerial view, silhouette). " ..
+    "For people: include age range, gender, and activity. " ..
+    "Only name specific landmarks, species, or varieties if you are highly confident — " ..
+    "wrong specifics are worse than correct generics. " ..
+    "For animals and plants you can confidently identify, use the most specific common name — " ..
+    "no scientific/Latin names, no taxonomic categories. " ..
+    "Include useful search synonyms where they differ meaningfully " ..
+    "(e.g. both 'jungle' and 'rainforest', both 'ocean' and 'sea') " ..
+    "but not near-duplicate descriptors (e.g. not both 'black fur' and 'dark fur'). " ..
+    "Avoid generic filler: nature, outdoor, natural, beautiful, environment, scenic, wildlife, " ..
+    "colorful, vibrant, small, large, tiny, photo, image, picture, stock, background."
+
 -- ── Build prompt with folder context and GPS ─────────────────────────────
 function M.buildPrompt(settings, folderHint, gpsInfo)
-    local prompt = settings.prompt
+    local prompt = M.BASE_PROMPT
 
     -- Prepend location context
     local contextParts = {}
@@ -418,7 +442,13 @@ function M.buildPrompt(settings, folderHint, gpsInfo)
         )
     end
 
-    -- Append output format instruction (separate from user-editable prompt)
+    -- Append user custom instructions (if any)
+    local custom = settings.prompt or ""
+    if custom ~= "" then
+        prompt = prompt .. " " .. custom
+    end
+
+    -- Append output format instruction
     prompt = prompt ..
         string.format(" Return up to %d keywords.", settings.maxKeywords) ..
         " Return ONLY a comma-separated list — no sentences, no numbering, no explanation." ..
@@ -628,6 +658,134 @@ function M.queryClaude(img, prompt, claudeModel, apiKey, timeoutSecs)
     end
 
     return nil, "Unexpected Claude response: " .. tostring(result):sub(1, 200)
+end
+
+-- ── OpenAI API provider ────────────────────────────────────────────────
+function M.queryOpenAI(img, prompt, openaiModel, apiKey, timeoutSecs)
+    local ts = tostring(math.floor(LrDate.currentTime() * 1000))
+    local encodeOk, body = pcall(json.encode, {
+        model      = openaiModel,
+        max_tokens = 1024,
+        messages   = {{
+            role    = "user",
+            content = {
+                {
+                    type      = "image_url",
+                    image_url = {
+                        url = "data:image/jpeg;base64," .. img.base64,
+                    },
+                },
+                {
+                    type = "text",
+                    text = prompt,
+                },
+            },
+        }}
+    })
+    if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
+
+    local cleanKey = apiKey:gsub("%s+", "")
+
+    local tmpCfg = M.TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
+    local tmpIn  = M.TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
+    local tmpOut = M.TEMP_DIR .. "/ai_kw_resp_" .. ts .. ".json"
+
+    if not M.writeCurlConfig(tmpCfg, "https://api.openai.com/v1/chat/completions", {
+        "Authorization: Bearer " .. cleanKey,
+        "Content-Type: application/json",
+    }, timeoutSecs) then
+        return nil, "Could not write curl config file"
+    end
+
+    local fh = io.open(tmpIn, "w")
+    if not fh then return nil, "Could not write temp file: " .. tmpIn end
+    fh:write(body); fh:close()
+
+    local result, err = M.curlPost(tmpCfg, tmpIn, tmpOut, img.fileSize, timeoutSecs)
+    if not result then return nil, err end
+
+    local ok, decoded = pcall(function() return json.decode(result) end)
+    if not ok or type(decoded) ~= "table" then
+        return nil, "Could not parse OpenAI response: " .. tostring(result):sub(1, 200)
+    end
+
+    if decoded.error then
+        return nil, "OpenAI API error: " .. (decoded.error.message or "Unknown")
+    end
+
+    if decoded.choices and type(decoded.choices) == "table" and decoded.choices[1] then
+        local msg = decoded.choices[1].message
+        if msg and msg.content then
+            return msg.content, nil
+        end
+    end
+
+    return nil, "Unexpected OpenAI response: " .. tostring(result):sub(1, 200)
+end
+
+-- ── Gemini API provider ────────────────────────────────────────────────
+function M.queryGemini(img, prompt, geminiModel, apiKey, timeoutSecs)
+    local ts = tostring(math.floor(LrDate.currentTime() * 1000))
+    local encodeOk, body = pcall(json.encode, {
+        contents = {{
+            parts = {
+                {
+                    inlineData = {
+                        mimeType = "image/jpeg",
+                        data     = img.base64,
+                    },
+                },
+                {
+                    text = prompt,
+                },
+            },
+        }}
+    })
+    if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
+
+    local cleanKey = apiKey:gsub("%s+", "")
+    local url = string.format(
+        "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+        geminiModel, cleanKey
+    )
+
+    local tmpCfg = M.TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
+    local tmpIn  = M.TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
+    local tmpOut = M.TEMP_DIR .. "/ai_kw_resp_" .. ts .. ".json"
+
+    if not M.writeCurlConfig(tmpCfg, url, {
+        "Content-Type: application/json",
+    }, timeoutSecs) then
+        return nil, "Could not write curl config file"
+    end
+
+    local fh = io.open(tmpIn, "w")
+    if not fh then return nil, "Could not write temp file: " .. tmpIn end
+    fh:write(body); fh:close()
+
+    local result, err = M.curlPost(tmpCfg, tmpIn, tmpOut, img.fileSize, timeoutSecs)
+    if not result then return nil, err end
+
+    local ok, decoded = pcall(function() return json.decode(result) end)
+    if not ok or type(decoded) ~= "table" then
+        return nil, "Could not parse Gemini response: " .. tostring(result):sub(1, 200)
+    end
+
+    if decoded.error then
+        return nil, "Gemini API error: " .. (decoded.error.message or "Unknown")
+    end
+
+    if decoded.candidates and type(decoded.candidates) == "table" and decoded.candidates[1] then
+        local content = decoded.candidates[1].content
+        if content and content.parts and type(content.parts) == "table" and content.parts[1] then
+            local text = content.parts[1].text
+            if text then
+                return text, nil
+            end
+        end
+    end
+
+    return nil, "Unexpected Gemini response: " .. tostring(result):sub(1, 200)
 end
 
 return M

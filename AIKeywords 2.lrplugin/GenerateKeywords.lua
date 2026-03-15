@@ -53,8 +53,12 @@ function Logger:init(settings)
     if settings.provider == "ollama" then
         self:log("Model: " .. settings.model)
         self:log("Ollama URL: " .. settings.ollamaUrl)
-    else
+    elseif settings.provider == "claude" then
         self:log("Model: " .. settings.claudeModel)
+    elseif settings.provider == "openai" then
+        self:log("Model: " .. settings.openaiModel)
+    elseif settings.provider == "gemini" then
+        self:log("Model: " .. settings.geminiModel)
     end
     self:log("Max keywords: " .. tostring(settings.maxKeywords))
     self:log("Keyword case: " .. settings.keywordCase)
@@ -116,6 +120,12 @@ local function queryModel(photo, folderHint, gpsInfo, settings, imageIndex)
     if settings.provider == "claude" then
         raw, err = Engine.queryClaude(img, prompt, settings.claudeModel,
             settings.claudeApiKey, settings.timeoutSecs)
+    elseif settings.provider == "openai" then
+        raw, err = Engine.queryOpenAI(img, prompt, settings.openaiModel,
+            settings.openaiApiKey, settings.timeoutSecs)
+    elseif settings.provider == "gemini" then
+        raw, err = Engine.queryGemini(img, prompt, settings.geminiModel,
+            settings.geminiApiKey, settings.timeoutSecs)
     else
         raw, err = Engine.queryOllama(img, prompt, settings.model,
             settings.ollamaUrl, settings.timeoutSecs)
@@ -170,10 +180,20 @@ LrTasks.startAsyncTask(function()
             return
         end
 
-        -- Validate Claude API key
+        -- Validate API keys
         if SETTINGS.provider == "claude" and (SETTINGS.claudeApiKey == nil or SETTINGS.claudeApiKey == "") then
             LrDialogs.message("AI Keywords",
                 "Claude API selected but no API key configured.\n\nOpen Settings and enter your Anthropic API key.", "warning")
+            return
+        end
+        if SETTINGS.provider == "openai" and (SETTINGS.openaiApiKey == nil or SETTINGS.openaiApiKey == "") then
+            LrDialogs.message("AI Keywords",
+                "OpenAI selected but no API key configured.\n\nOpen Settings and enter your OpenAI API key.", "warning")
+            return
+        end
+        if SETTINGS.provider == "gemini" and (SETTINGS.geminiApiKey == nil or SETTINGS.geminiApiKey == "") then
+            LrDialogs.message("AI Keywords",
+                "Gemini selected but no API key configured.\n\nOpen Settings and enter your Google AI API key.", "warning")
             return
         end
 
@@ -216,11 +236,26 @@ LrTasks.startAsyncTask(function()
         -- Parse folder aliases once (not per-image)
         local folderAliases = Engine.parseAliases(SETTINGS.folderAliases)
 
-        -- Log the base prompt once (without per-image context)
-        log:log("Base prompt: " .. SETTINGS.prompt)
+        -- Log prompts once (without per-image context)
+        log:log("Base prompt: (built-in keywording prompt)")
+        if SETTINGS.prompt ~= "" then
+            log:log("Custom instructions: " .. SETTINGS.prompt)
+        end
 
-        local modelName = SETTINGS.provider == "claude" and SETTINGS.claudeModel or SETTINGS.model
-        local providerLabel = SETTINGS.provider == "claude" and "Claude API" or "Ollama"
+        local modelName, providerLabel
+        if SETTINGS.provider == "claude" then
+            modelName = SETTINGS.claudeModel
+            providerLabel = "Claude API"
+        elseif SETTINGS.provider == "openai" then
+            modelName = SETTINGS.openaiModel
+            providerLabel = "OpenAI"
+        elseif SETTINGS.provider == "gemini" then
+            modelName = SETTINGS.geminiModel
+            providerLabel = "Gemini"
+        else
+            modelName = SETTINGS.model
+            providerLabel = "Ollama"
+        end
         local progress = LrProgressScope({
             title           = "AI Keywords (" .. providerLabel .. " — " .. modelName .. ")",
             functionContext = context,

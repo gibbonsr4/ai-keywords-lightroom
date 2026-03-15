@@ -1,12 +1,12 @@
 # AI Keywords — Lightroom Classic Plugin
 
 ## Project Overview
-A macOS-only Lightroom Classic plugin that generates and applies searchable keywords to photos using either local Ollama vision models or the Claude API. Built in Lua using the LR SDK.
+A macOS-only Lightroom Classic plugin that generates and applies searchable keywords to photos using local Ollama vision models or cloud APIs (Claude, OpenAI, Gemini). Built in Lua using the LR SDK.
 
 ## File Structure
 - `Info.lua` — LR plugin manifest, menu items, version
 - `Prefs.lua` — Preference defaults and getPrefs() loader. Pure data, no UI, no side effects. Safe to dofile().
-- `AIEngine.lua` — Shared AI inference engine. Image rendering, API calls (Ollama + Claude), keyword parsing, Ollama status checks. Used by GenerateKeywords.lua, CompareModels.lua, and Config.lua.
+- `AIEngine.lua` — Shared AI inference engine. Image rendering, API calls (Ollama + Claude + OpenAI + Gemini), keyword parsing, Ollama status checks. Used by GenerateKeywords.lua, CompareModels.lua, and Config.lua.
 - `Config.lua` — Settings dialog UI. Invoked via Library > Plugin Extras > Settings…
 - `GenerateKeywords.lua` — Main keyword generation logic. Invoked via Library > Plugin Extras > Generate AI Keywords.
 - `CompareModels.lua` — Model comparison tool. Runs 2–5 models on one photo without saving keywords. Invoked via Library > Plugin Extras > Compare Models.
@@ -15,7 +15,7 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 
 ## Architecture
 1. User selects photos in LR Library, runs "Generate AI Keywords"
-2. For each photo: render temp JPEG via LrExportSession → base64 encode → send to Ollama or Claude API via curl → parse comma-separated keywords → write to LR catalog
+2. For each photo: render temp JPEG via LrExportSession → base64 encode → send to AI provider (Ollama/Claude/OpenAI/Gemini) via curl → parse comma-separated keywords → write to LR catalog
 3. Folder context (folder path hints, GPS coordinates) prepended to prompt for location awareness
 4. Folder aliases expand abbreviations (e.g. DR → Dominican Republic)
 5. Parent keyword option nests all AI keywords under a container keyword
@@ -26,7 +26,7 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - **LrTasks.pcall** (not standard pcall) wraps catalog writes — Lua 5.1 can't yield across C boundaries
 - **withWriteAccessDo { timeout = 10 }** for catalog lock contention
 - **CSV output format** from models (not JSON) — battle-tested, simpler prompts, better for Haiku
-- **Both provider sections always visible** in Settings — LR SDK visible binding doesn't collapse elements
+- **All provider sections always visible** in Settings — LR SDK visible binding doesn't collapse elements
 
 ## Provider Details
 
@@ -41,11 +41,23 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - Body: `{ model, max_tokens: 1024, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }, { type: "text", text: prompt }] }] }`
 - Models: claude-haiku-4-5-20251001 (~$0.002/image), claude-sonnet-4-6 (~$0.007/image)
 
+### OpenAI API
+- Endpoint: `https://api.openai.com/v1/chat/completions`
+- Headers: Authorization: Bearer {key}, Content-Type: application/json
+- Body: `{ model, max_tokens: 1024, messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "data:image/jpeg;base64,{data}" } }, { type: "text", text: prompt }] }] }`
+- Models: gpt-4o-mini (~$0.001/image), gpt-4o (~$0.005/image)
+
+### Gemini API
+- Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}`
+- Headers: Content-Type: application/json (API key in URL query param)
+- Body: `{ contents: [{ parts: [{ inlineData: { mimeType: "image/jpeg", data: base64 } }, { text: prompt }] }] }`
+- Models: gemini-2.0-flash (~$0.0005/image), gemini-2.5-flash (~$0.001/image), gemini-2.5-pro (~$0.005/image)
+
 ## Image Rendering
-- Claude: 1568px long edge (per Anthropic recommendation)
+- Cloud providers (Claude, OpenAI, Gemini): 1568px long edge
 - Ollama: 1024px long edge
 - JPEG quality: 70%, sRGB, minimal metadata, no sharpening/watermark
-- Progressive fallback for Claude if image exceeds 3.75MB raw: 1568 → 1024 → 768
+- Progressive fallback for cloud providers if image exceeds 3.75MB raw: 1568 → 1024 → 768
 - Minimum dimension check: 200px short edge
 
 ## Prompt Engineering Notes
@@ -53,8 +65,18 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - Haiku confidently hallucinates specific landmark names (e.g. "Fort Jefferson" for any coastal fort)
 - Sonnet handles complex reasoning chains and gets specific IDs right
 - Qwen2.5-VL 7B (local) is surprisingly good — correctly ID'd sugarcane in Dominican Republic
-- The output format instruction ("Return ONLY a comma-separated list...") is auto-appended by buildPrompt(), separate from the user-editable prompt
+- The prompt is assembled by buildPrompt() in this order: [GPS/folder context] + [BASE_PROMPT] + [user custom instructions] + [output format]
+- BASE_PROMPT is hardcoded in AIEngine.lua — contains keywording best practices, not user-editable
+- settings.prompt contains optional user custom instructions (e.g. "Focus on architecture") — can be empty
 - GPS coordinates and folder context are prepended when available
+
+### Keyword Style (based on stock photography best practices)
+- **Atomic keywords** — single-concept preferred; multi-word only for established terms (golden hour, copy space, fire pit) and proper nouns (New York, Baja California)
+- **Singular nouns** — "boat" not "boats"; search engines handle inflection
+- **Gerund verbs** — "running" not "run"
+- **Lowercase** — default keywordCase changed to "lowercase"; proper nouns lowercased by parser
+- **Include** — subjects, setting, dominant colors, mood/emotion, composition terms (copy space, aerial view, silhouette), people descriptors (age range, gender, activity)
+- **Filler exclusion** — expanded list includes: nature, outdoor, natural, beautiful, environment, scenic, wildlife, colorful, vibrant, small, large, tiny, photo, image, picture, stock, background
 
 ## Known Issues / Code Review Findings
 
@@ -88,15 +110,18 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - ~~maxKeywords not in prompt~~ — Model told "Return up to N keywords".
 
 ### Remaining Issues
-6. **LR_reimportExportedPhoto = false** may not prevent catalog import on all LR versions. (Monitoring)
-8. **LrExportSession per image** — Could batch renders. Deferred: API time is the bottleneck, not render time.
-11. **Both provider sections always visible** — LR SDK limitation, documented.
-26. **curlPost temp file timing** — Response is read into memory before deletion; minor debug concern only.
+6. **LR_reimportExportedPhoto = false** may not prevent catalog import on all LR versions. (Monitoring — no reports of this occurring, temp files are deleted after reading.)
+11. **All provider sections always visible** — LR SDK limitation, no dynamic collapse available.
+
+### Closed (not actual issues)
+8. ~~LrExportSession per image~~ — API calls (2-10s) dominate total time; render batching would save ~500ms. Not worth the complexity.
+26. ~~curlPost temp file timing~~ — Not a race condition. LrTasks.execute() blocks until curl finishes; response is safely in memory before temp file deletion.
 
 ### Parent Keyword Inconsistency
-- `createKeyword` with `returnExisting=true` finds existing root-level keywords and returns them instead of creating under the parent. Existing root keywords from earlier runs stay flat.
-- No SDK API to move keywords. User must delete and re-create.
-- Current workaround: tries `returnExisting=false` first, falls back to `true`. Still inconsistent.
+- If keywords were previously created at root level (no parent), later enabling a parent keyword won't move them. LR SDK's `createKeyword` with `returnExisting=true` returns the existing root-level keyword instead of creating a new one under the parent.
+- **Root cause:** LR SDK has no `moveKeyword()` API. Keywords cannot be relocated after creation.
+- **Impact:** Only affects users who change the parent keyword setting after previous runs. Keywords still function in searches — only the hierarchy/organization is affected.
+- **Workaround:** User must manually delete the stranded root-level keywords and re-run.
 
 ## Testing Notes
 - Test LrExportSession rendering first — this is the biggest untested change from the sips refactor
@@ -118,7 +143,7 @@ See ROADMAP.md for the full feature roadmap including:
 - Metadata expansion (titles, descriptions, alt text)
 - Controlled vocabulary / keyword matching
 - Hierarchical keyword generation
-- Additional providers (Gemini, GPT-4o, LM Studio)
+- ~~Additional providers~~ ✓ (Ollama, Claude, OpenAI, Gemini)
 - Semantic search (major feature, separate architecture)
 - Batch API support
 - Keyword best practices integration

@@ -20,10 +20,21 @@ local LrView            = import 'LrView'
 local Engine = dofile(_PLUGIN.path .. '/AIEngine.lua')
 local Prefs  = dofile(_PLUGIN.path .. '/Prefs.lua')
 
--- ── Claude models available for comparison ────────────────────────────────
+-- ── Cloud models available for comparison ──────────────────────────────────
 local CLAUDE_MODELS = {
     { value = "claude-haiku-4-5-20251001", label = "Claude Haiku 4.5",  cost = "~$0.002" },
     { value = "claude-sonnet-4-6",         label = "Claude Sonnet 4.6", cost = "~$0.007" },
+}
+
+local OPENAI_MODELS = {
+    { value = "gpt-4o-mini", label = "GPT-4o Mini",  cost = "~$0.001" },
+    { value = "gpt-4o",      label = "GPT-4o",       cost = "~$0.005" },
+}
+
+local GEMINI_MODELS = {
+    { value = "gemini-2.0-flash", label = "Gemini 2.0 Flash", cost = "~$0.0005" },
+    { value = "gemini-2.5-flash", label = "Gemini 2.5 Flash", cost = "~$0.001" },
+    { value = "gemini-2.5-pro",   label = "Gemini 2.5 Pro",   cost = "~$0.005" },
 }
 
 -- ── Build the model selection dialog ──────────────────────────────────────
@@ -70,14 +81,40 @@ local function showSelectionDialog(photo, settings)
     end
 
     -- Claude models (only if API key is configured)
-    local hasApiKey = settings.claudeApiKey and settings.claudeApiKey ~= ""
-    if hasApiKey then
+    local hasClaudeKey = settings.claudeApiKey and settings.claudeApiKey ~= ""
+    if hasClaudeKey then
         for _, cm in ipairs(CLAUDE_MODELS) do
             table.insert(availableModels, {
                 provider = "claude",
                 model    = cm.value,
                 label    = cm.label,
                 detail   = cm.cost .. "/image",
+            })
+        end
+    end
+
+    -- OpenAI models (only if API key is configured)
+    local hasOpenaiKey = settings.openaiApiKey and settings.openaiApiKey ~= ""
+    if hasOpenaiKey then
+        for _, om in ipairs(OPENAI_MODELS) do
+            table.insert(availableModels, {
+                provider = "openai",
+                model    = om.value,
+                label    = om.label,
+                detail   = om.cost .. "/image",
+            })
+        end
+    end
+
+    -- Gemini models (only if API key is configured)
+    local hasGeminiKey = settings.geminiApiKey and settings.geminiApiKey ~= ""
+    if hasGeminiKey then
+        for _, gm in ipairs(GEMINI_MODELS) do
+            table.insert(availableModels, {
+                provider = "gemini",
+                model    = gm.value,
+                label    = gm.label,
+                detail   = gm.cost .. "/image",
             })
         end
     end
@@ -97,8 +134,14 @@ local function showSelectionDialog(photo, settings)
                 msg = msg .. "• No Ollama vision models installed — install one from Settings.\n"
             end
         end
-        if not hasApiKey then
+        if not hasClaudeKey then
             msg = msg .. "• No Claude API key configured — add one in Settings.\n"
+        end
+        if not hasOpenaiKey then
+            msg = msg .. "• No OpenAI API key configured — add one in Settings.\n"
+        end
+        if not hasGeminiKey then
+            msg = msg .. "• No Gemini API key configured — add one in Settings.\n"
         end
         LrDialogs.message("Compare Models", msg, "warning")
         return nil
@@ -114,7 +157,9 @@ local function showSelectionDialog(photo, settings)
             local key = "sel_" .. i
             local isCurrentOllama = (m.provider == "ollama" and m.model == settings.model)
             local isCurrentClaude = (m.provider == "claude" and m.model == settings.claudeModel)
-            props[key] = isCurrentOllama or isCurrentClaude
+            local isCurrentOpenai = (m.provider == "openai" and m.model == settings.openaiModel)
+            local isCurrentGemini = (m.provider == "gemini" and m.model == settings.geminiModel)
+            props[key] = isCurrentOllama or isCurrentClaude or isCurrentOpenai or isCurrentGemini
         end
 
         -- Prompt override
@@ -128,6 +173,8 @@ local function showSelectionDialog(photo, settings)
         -- Build checkbox rows grouped by provider
         local ollamaRows = {}
         local claudeRows = {}
+        local openaiRows = {}
+        local geminiRows = {}
 
         for i, m in ipairs(availableModels) do
             local key = "sel_" .. i
@@ -144,8 +191,12 @@ local function showSelectionDialog(photo, settings)
             }
             if m.provider == "ollama" then
                 table.insert(ollamaRows, row)
-            else
+            elseif m.provider == "claude" then
                 table.insert(claudeRows, row)
+            elseif m.provider == "openai" then
+                table.insert(openaiRows, row)
+            elseif m.provider == "gemini" then
+                table.insert(geminiRows, row)
             end
         end
 
@@ -196,6 +247,30 @@ local function showSelectionDialog(photo, settings)
             table.insert(sections, f:group_box(claudeGroup))
         end
 
+        -- OpenAI section
+        if #openaiRows > 0 then
+            local openaiGroup = {
+                title           = "OpenAI API",
+                fill_horizontal = 1,
+            }
+            for _, row in ipairs(openaiRows) do
+                table.insert(openaiGroup, row)
+            end
+            table.insert(sections, f:group_box(openaiGroup))
+        end
+
+        -- Gemini section
+        if #geminiRows > 0 then
+            local geminiGroup = {
+                title           = "Gemini API",
+                fill_horizontal = 1,
+            }
+            for _, row in ipairs(geminiRows) do
+                table.insert(geminiGroup, row)
+            end
+            table.insert(sections, f:group_box(geminiGroup))
+        end
+
         -- Prompt override
         table.insert(sections, f:separator { fill_horizontal = 1 })
         table.insert(sections, f:row {
@@ -204,13 +279,13 @@ local function showSelectionDialog(photo, settings)
                 width = 80,
             },
             f:checkbox {
-                title = "Use a different prompt for this comparison",
+                title = "Use different custom instructions for this comparison",
                 value = LrView.bind("useCustomPrompt"),
             },
         })
         table.insert(sections, f:row {
             f:static_text {
-                title     = "Prompt:",
+                title     = "Instructions:",
                 width     = 80,
                 alignment = "right",
             },
@@ -312,11 +387,13 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
     }
     local prompt = Engine.buildPrompt(promptSettings, folderHint, gpsInfo)
 
-    -- Pre-render images (once per provider type to avoid redundant renders)
-    local hasOllama, hasClaude = false, false
+    -- Pre-render images (once per render size to avoid redundant renders)
+    local hasOllama, hasCloud = false, false
     for _, m in ipairs(selectedModels) do
         if m.provider == "ollama" then hasOllama = true end
-        if m.provider == "claude" then hasClaude = true end
+        if m.provider == "claude" or m.provider == "openai" or m.provider == "gemini" then
+            hasCloud = true
+        end
     end
 
     local progress = LrProgressScope({
@@ -324,16 +401,16 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
         functionContext = context,
     })
 
-    local ollamaImg, claudeImg
-    local ollamaImgErr, claudeImgErr
+    local ollamaImg, cloudImg
+    local ollamaImgErr, cloudImgErr
 
     if hasOllama then
         local ts = tostring(math.floor(LrDate.currentTime() * 1000)) .. "_cmp_oll"
         ollamaImg, ollamaImgErr = Engine.prepareImage(photo, ts, "ollama")
     end
-    if hasClaude then
-        local ts = tostring(math.floor(LrDate.currentTime() * 1000)) .. "_cmp_cla"
-        claudeImg, claudeImgErr = Engine.prepareImage(photo, ts, "claude")
+    if hasCloud then
+        local ts = tostring(math.floor(LrDate.currentTime() * 1000)) .. "_cmp_cld"
+        cloudImg, cloudImgErr = Engine.prepareImage(photo, ts, "claude")
     end
 
     -- Run each model sequentially
@@ -344,8 +421,8 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
         progress:setPortionComplete(i - 1, #selectedModels)
         progress:setCaption(string.format("[%d/%d] %s…", i, #selectedModels, m.label))
 
-        local img = (m.provider == "claude") and claudeImg or ollamaImg
-        local imgErr = (m.provider == "claude") and claudeImgErr or ollamaImgErr
+        local img = (m.provider == "ollama") and ollamaImg or cloudImg
+        local imgErr = (m.provider == "ollama") and ollamaImgErr or cloudImgErr
 
         local entry = {
             label    = m.label,
@@ -366,6 +443,14 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
             if m.provider == "claude" then
                 raw, err = Engine.queryClaude(
                     img, prompt, m.model, settings.claudeApiKey, settings.timeoutSecs
+                )
+            elseif m.provider == "openai" then
+                raw, err = Engine.queryOpenAI(
+                    img, prompt, m.model, settings.openaiApiKey, settings.timeoutSecs
+                )
+            elseif m.provider == "gemini" then
+                raw, err = Engine.queryGemini(
+                    img, prompt, m.model, settings.geminiApiKey, settings.timeoutSecs
                 )
             else
                 raw, err = Engine.queryOllama(

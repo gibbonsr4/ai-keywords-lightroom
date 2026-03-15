@@ -15,29 +15,20 @@ local DEFAULTS = {
     model            = "qwen2.5vl:7b",
     claudeApiKey     = "",
     claudeModel      = "claude-haiku-4-5-20251001",
+    openaiApiKey     = "",
+    openaiModel      = "gpt-4o-mini",
+    geminiApiKey     = "",
+    geminiModel      = "gemini-2.5-flash",
     maxKeywords      = 20,
     timeoutSecs      = 90,
     useFolderContext = true,
     skipKeyworded    = false,
     parentKeyword    = "",
-    keywordCase      = "as_returned",
+    keywordCase      = "lowercase",
     enableLogging    = false,
     logFolder        = "",
     folderAliases    = "",
-    prompt           = (
-        "Analyze this photo and return keywords ordered by prominence. " ..
-        "Only name specific landmarks, species, or crop varieties if you are highly confident. " ..
-        "If unsure, use a broader category instead (e.g. 'fortress' not a specific fort name, " ..
-        "'crop field' not a specific crop, 'songbird' not a specific species). " ..
-        "Wrong specifics are worse than correct generics. " ..
-        "For animals and plants you can confidently identify, use the most specific common name — " ..
-        "no scientific/Latin names, no taxonomic categories (mammal, primate, reptile, amphibian). " ..
-        "Include useful search synonyms where they differ meaningfully " ..
-        "(e.g. both 'jungle' and 'rainforest', both 'ocean' and 'sea') " ..
-        "but not near-duplicate descriptors (e.g. not both 'black fur' and 'dark fur'). " ..
-        "Avoid generic filler: nature, outdoor, natural, beautiful, environment, scenic, wildlife, " ..
-        "colorful, vibrant, small, large, tiny."
-    ),
+    prompt           = "",
 }
 
 -- Helper: Lua's `cond and valTrue or valFalse` breaks when valTrue is false.
@@ -64,6 +55,10 @@ local function getPrefs()
         model            = stringPref(prefs, "model"),
         claudeApiKey     = stringPref(prefs, "claudeApiKey", true),
         claudeModel      = stringPref(prefs, "claudeModel"),
+        openaiApiKey     = stringPref(prefs, "openaiApiKey", true),
+        openaiModel      = stringPref(prefs, "openaiModel"),
+        geminiApiKey     = stringPref(prefs, "geminiApiKey", true),
+        geminiModel      = stringPref(prefs, "geminiModel"),
         maxKeywords      = (prefs.maxKeywords  ~= nil) and prefs.maxKeywords  or DEFAULTS.maxKeywords,
         timeoutSecs      = (prefs.timeoutSecs  ~= nil) and prefs.timeoutSecs  or DEFAULTS.timeoutSecs,
         useFolderContext = boolPref(prefs, "useFolderContext"),
@@ -73,7 +68,7 @@ local function getPrefs()
         enableLogging    = boolPref(prefs, "enableLogging"),
         logFolder        = stringPref(prefs, "logFolder", true),
         folderAliases    = stringPref(prefs, "folderAliases", true),
-        prompt           = stringPref(prefs, "prompt"),
+        prompt           = stringPref(prefs, "prompt", true),
     }
 end
 
