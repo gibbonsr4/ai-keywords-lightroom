@@ -74,14 +74,14 @@ M.CLAUDE_MODELS = {
 }
 
 M.OPENAI_MODELS = {
-    { value = "gpt-4o-mini", label = "GPT-4o Mini",  cost = "~$0.001" },
-    { value = "gpt-4o",      label = "GPT-4o",       cost = "~$0.005" },
+    { value = "gpt-5-mini-2025-08-07", label = "GPT-5 Mini",  cost = "~$0.001" },
+    { value = "gpt-5.4",               label = "GPT-5.4",     cost = "~$0.007" },
 }
 
 M.GEMINI_MODELS = {
-    { value = "gemini-2.0-flash", label = "Gemini 2.0 Flash", cost = "~$0.0005" },
-    { value = "gemini-2.5-flash", label = "Gemini 2.5 Flash", cost = "~$0.001" },
-    { value = "gemini-2.5-pro",   label = "Gemini 2.5 Pro",   cost = "~$0.005" },
+    { value = "gemini-2.5-flash-lite", label = "Gemini 2.5 Flash-Lite", cost = "~$0.0003" },
+    { value = "gemini-2.5-flash",      label = "Gemini 2.5 Flash",      cost = "~$0.001" },
+    { value = "gemini-2.5-pro",        label = "Gemini 2.5 Pro",        cost = "~$0.005" },
 }
 
 -- ── Remote model list URL ───────────────────────────────────────────────

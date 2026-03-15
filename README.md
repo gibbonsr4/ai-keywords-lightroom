@@ -107,14 +107,14 @@ Recommended models for 24GB Apple Silicon:
 | Setting | Notes |
 |---|---|
 | API Key | Your OpenAI API key |
-| Model | GPT-4o Mini (~$0.001/image) or GPT-4o (~$0.005/image) |
+| Model | GPT-5 Mini (~$0.001/image) or GPT-5.4 (~$0.007/image) |
 
 ### Gemini Settings
 
 | Setting | Notes |
 |---|---|
 | API Key | Your Google AI API key |
-| Model | Gemini 2.0 Flash (~$0.0005/image), 2.5 Flash (~$0.001/image), or 2.5 Pro (~$0.005/image) |
+| Model | Gemini 2.5 Flash-Lite (~$0.0003/image), 2.5 Flash (~$0.001/image), or 2.5 Pro (~$0.005/image) |
 
 ### Keyword Settings
 
@@ -152,12 +152,12 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 
 | | Ollama | Claude | OpenAI | Gemini |
 |---|---|---|---|---|
-| Cost | Free | $0.002–0.007/image | $0.001–0.005/image | $0.0005–0.005/image |
+| Cost | Free | $0.002–0.007/image | $0.001–0.007/image | $0.0003–0.005/image |
 | Speed | 4–20s (Apple Silicon) | ~2s | ~2s | ~2s |
 | Quality | Good general keywords | Excellent, best landmark ID | Very good | Very good |
 | Privacy | Local, nothing leaves your machine | Cloud | Cloud | Cloud |
 
-**Recommendation:** Ollama for casual tagging and privacy. Claude Sonnet for accuracy-critical runs. Gemini 2.0 Flash for cheapest cloud option. Use Compare Models to test which works best for your photos.
+**Recommendation:** Ollama for casual tagging and privacy. Claude Sonnet for accuracy-critical runs. Gemini 2.5 Flash-Lite for cheapest cloud option. Use Compare Models to test which works best for your photos.
 
 ---
 
