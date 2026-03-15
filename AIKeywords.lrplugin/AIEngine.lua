@@ -18,7 +18,7 @@ local json = dofile(_PLUGIN.path .. '/dkjson.lua')
 local M = {}
 
 -- ── Constants ─────────────────────────────────────────────────────────────
-M.TEMP_DIR = "/tmp"
+M.TEMP_DIR = os.getenv("TMPDIR") or "/tmp"
 
 -- Cloud API base64 image limit ~5MB. Base64 is ~4/3 of raw, so raw limit ~3.75MB.
 M.CLOUD_MAX_RAW_BYTES = 3750000
