@@ -11,7 +11,7 @@ return {
     LrPluginName        = 'AI Keywords',
     LrPluginInfoUrl     = 'https://github.com/gibbonsr4/ai-keywords-lightroom',
 
-    -- Adds two items under Library > Plugin Extras
+    -- Adds three items under Library > Plugin Extras
     LrLibraryMenuItems = {
         {
             title = 'Generate AI Keywords — Selected Photos',

@@ -26,7 +26,7 @@ local OPENAI_MODELS = Engine.OPENAI_MODELS
 local GEMINI_MODELS = Engine.GEMINI_MODELS
 
 -- ── Build the model selection dialog ──────────────────────────────────────
--- Returns a list of selected models [{provider, model, label}] or nil if canceled.
+-- Returns (selectedModels, promptOverride) or nil if canceled.
 local function showSelectionDialog(photo, settings)
     local f       = LrView.osFactory()
     local catalog = LrApplication.activeCatalog()
@@ -352,7 +352,7 @@ end
 local function runComparison(photo, selectedModels, settings, promptOverride, context)
     local catalog = LrApplication.activeCatalog()
 
-    -- Build folder hint and GPS info (same as normal keyword generation)
+    -- Build folder hint and GPS info (same logic as GenerateKeywords)
     local folderAliases = Engine.parseAliases(settings.folderAliases)
     local folderHint = nil
     if settings.useFolderContext then
@@ -399,6 +399,8 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
         ollamaImg, ollamaImgErr = Engine.prepareImage(photo, ts, "ollama")
     end
     if hasCloud then
+        -- "claude" is used as provider for all cloud renders — prepareImage only
+        -- uses provider to select render size (1568px for any non-Ollama provider)
         local ts = tostring(math.floor(LrDate.currentTime() * 1000)) .. "_cmp_cld"
         cloudImg, cloudImgErr = Engine.prepareImage(photo, ts, "claude")
     end
@@ -602,7 +604,7 @@ local function showResults(photo, results, promptOverride)
         contents   = contents,
         actionVerb = "Compare Again",
         otherVerb  = "Done",
-        cancelVerb = "< exclude",
+        cancelVerb = "< exclude",  -- hides the Cancel button
     }
 
     return result == "ok"  -- "ok" = Compare Again, "other" = Done

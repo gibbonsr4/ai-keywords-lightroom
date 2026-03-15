@@ -2,8 +2,8 @@
   AIEngine.lua
   ─────────────────────────────────────────────────────────────────────────────
   Shared AI inference engine — image rendering, API calls, keyword parsing.
-  Used by GenerateKeywords.lua and CompareModels.lua.
-  Pure functions, no UI, no side effects beyond temp files.
+  Used by GenerateKeywords.lua, CompareModels.lua, and Config.lua.
+  Stateless helper module — no UI, no dialog boxes.
 --]]
 
 local LrApplication     = import 'LrApplication'
@@ -20,8 +20,8 @@ local M = {}
 -- ── Constants ─────────────────────────────────────────────────────────────
 M.TEMP_DIR = "/tmp"
 
--- Claude's base64 image limit is 5MB. Base64 is ~4/3 of raw, so raw limit ~3.75MB.
-M.CLAUDE_MAX_RAW_BYTES = 3750000
+-- Cloud API base64 image limit ~5MB. Base64 is ~4/3 of raw, so raw limit ~3.75MB.
+M.CLOUD_MAX_RAW_BYTES = 3750000
 
 -- Minimum image dimension — images smaller than this won't produce useful keywords
 M.MIN_IMAGE_DIMENSION = 200
@@ -307,8 +307,8 @@ function M.getFolderContext(photo, catalog, aliases)
 end
 
 -- ── Image rendering via LrExportSession ──────────────────────────────────
--- Uses Lightroom's own render pipeline. Handles every format LR can open
--- (RAW, HEIC, PSD, TIFF, etc.) and respects Develop adjustments.
+-- Uses Lightroom's own render pipeline. Handles every format in SUPPORTED_EXTS
+-- (RAW, HEIC, TIFF, etc.) and respects Develop adjustments.
 -- Always outputs sRGB JPEG with minimal metadata, no sharpening/watermark.
 -- Returns (jpegPath, fileSize) or (nil, errorMsg).
 function M.renderImage(photo, ts, maxDimension)
@@ -379,11 +379,11 @@ function M.prepareImage(photo, ts, provider)
     local renderedPath, renderedSize = M.renderImage(photo, ts, renderDim)
 
     -- For cloud providers: retry at smaller sizes if too large for API
-    if provider ~= "ollama" and renderedPath and renderedSize > M.CLAUDE_MAX_RAW_BYTES then
+    if provider ~= "ollama" and renderedPath and renderedSize > M.CLOUD_MAX_RAW_BYTES then
         M.safeDelete(renderedPath)
         renderedPath, renderedSize = M.renderImage(photo, ts .. "_sm", 1024)
     end
-    if provider ~= "ollama" and renderedPath and renderedSize > M.CLAUDE_MAX_RAW_BYTES then
+    if provider ~= "ollama" and renderedPath and renderedSize > M.CLOUD_MAX_RAW_BYTES then
         M.safeDelete(renderedPath)
         renderedPath, renderedSize = M.renderImage(photo, ts .. "_xs", 768)
     end
@@ -400,7 +400,7 @@ function M.prepareImage(photo, ts, provider)
     end
 
     -- Final size check for cloud providers
-    if provider ~= "ollama" and #imageData > M.CLAUDE_MAX_RAW_BYTES then
+    if provider ~= "ollama" and #imageData > M.CLOUD_MAX_RAW_BYTES then
         return nil, string.format(
             "Image too large for %s API (%.1f MB). Try exporting a smaller JPEG.",
             provider, #imageData / 1048576

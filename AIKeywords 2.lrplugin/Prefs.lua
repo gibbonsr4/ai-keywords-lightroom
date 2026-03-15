@@ -2,7 +2,7 @@
   Prefs.lua
   ─────────────────────────────────────────────────────────────────────────────
   Pure preferences module — no UI, no side effects.
-  Safe to dofile() from GenerateKeywords.lua.
+  Safe to dofile() from any module.
 
   The Settings dialog lives in Config.lua and is invoked via the LR menu.
 --]]

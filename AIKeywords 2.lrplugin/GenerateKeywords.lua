@@ -179,6 +179,9 @@ local function applyKeywords(catalog, photo, keywords, filename, settings)
             end
 
             for _, kwText in ipairs(keywords) do
+                -- First call: returnExisting=true only when no parent (flat keywords).
+                -- With a parent, returnExisting=false avoids returning a stale root-level
+                -- keyword with the same name. If that fails, retry with returnExisting=true.
                 local kw = catalog:createKeyword(kwText, {}, true, parent, not hasParent)
                 if not kw then
                     kw = catalog:createKeyword(kwText, {}, true, parent, true)
