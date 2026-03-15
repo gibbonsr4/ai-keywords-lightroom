@@ -31,9 +31,9 @@ Images are rendered via Lightroom's own export pipeline, so any format Lightroom
 
 ## Installation
 
-1. Place the `AIKeywords 2.lrplugin` folder somewhere permanent (e.g. `~/Documents/LR Plugins/`)
+1. Place the `AIKeywords.lrplugin` folder somewhere permanent (e.g. `~/Documents/LR Plugins/`)
 2. In Lightroom Classic: **File → Plug-in Manager → Add**
-3. Navigate to and select the `AIKeywords 2.lrplugin` folder
+3. Navigate to and select the `AIKeywords.lrplugin` folder
 4. Click **Done**
 
 ---
