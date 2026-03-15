@@ -26,7 +26,8 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - **LrTasks.pcall** (not standard pcall) wraps catalog writes — Lua 5.1 can't yield across C boundaries
 - **withWriteAccessDo { timeout = 10 }** for catalog lock contention
 - **CSV output format** from models (not JSON) — battle-tested, simpler prompts, better for Haiku
-- **All provider sections always visible** in Settings — LR SDK visible binding doesn't collapse elements
+- **`f:tab_view`** for provider selection — each provider in its own tab, `value` bound to provider prop
+- **GPS toggle** (`useGPS`) — allows users to disable GPS coordinate context for privacy
 
 ## Provider Details
 
@@ -111,9 +112,9 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 
 ### Remaining Issues
 6. **LR_reimportExportedPhoto = false** may not prevent catalog import on all LR versions. (Monitoring — no reports of this occurring, temp files are deleted after reading.)
-11. **All provider sections always visible** — LR SDK limitation, no dynamic collapse available.
 
 ### Closed (not actual issues)
+11. ~~All provider sections always visible~~ — Resolved with `f:tab_view` (SDK 1.3+). Each provider in its own tab.
 8. ~~LrExportSession per image~~ — API calls (2-10s) dominate total time; render batching would save ~500ms. Not worth the complexity.
 26. ~~curlPost temp file timing~~ — Not a race condition. LrTasks.execute() blocks until curl finishes; response is safely in memory before temp file deletion.
 

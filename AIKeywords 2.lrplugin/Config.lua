@@ -23,6 +23,21 @@ local getInstalledModels = Engine.getInstalledModels
 local isModelInstalled  = Engine.isModelInstalled
 local fetchRemoteModels = Engine.fetchRemoteModels
 local VISION_MODELS     = Engine.VISION_MODELS
+local CLAUDE_MODELS     = Engine.CLAUDE_MODELS
+local OPENAI_MODELS     = Engine.OPENAI_MODELS
+local GEMINI_MODELS     = Engine.GEMINI_MODELS
+
+-- Build popup_menu items from a cloud model list: "Label (~$0.00X/image)"
+local function cloudModelItems(models)
+    local items = {}
+    for _, m in ipairs(models) do
+        table.insert(items, {
+            title = string.format("%s (%s/image)", m.label, m.cost),
+            value = m.value,
+        })
+    end
+    return items
+end
 
 -- ── Query Ollama version ────────────────────────────────────────────────
 local json = dofile(_PLUGIN.path .. '/dkjson.lua')
@@ -167,6 +182,7 @@ LrTasks.startAsyncTask(function()
         props.geminiModel      = current.geminiModel
         props.maxKeywords      = tostring(current.maxKeywords)
         props.timeoutSecs      = tostring(current.timeoutSecs)
+        props.useGPS           = current.useGPS
         props.useFolderContext = current.useFolderContext
         props.skipKeyworded    = current.skipKeyworded
         props.parentKeyword    = current.parentKeyword
@@ -230,272 +246,233 @@ LrTasks.startAsyncTask(function()
             bind_to_object  = props,
 
             -- ═══════════════════════════════════════════════════════════
-            -- PROVIDER SELECTOR
+            -- PROVIDER (tabbed)
             -- ═══════════════════════════════════════════════════════════
-            f:row {
-                f:static_text {
-                    title     = "AI Provider:",
-                    width     = LrView.share("label_width"),
-                    alignment = "right",
-                },
-                f:radio_button {
-                    title         = "Ollama (local)",
-                    value         = LrView.bind("provider"),
-                    checked_value = "ollama",
-                },
-                f:radio_button {
-                    title         = "Claude API (cloud)",
-                    value         = LrView.bind("provider"),
-                    checked_value = "claude",
-                },
-                f:radio_button {
-                    title         = "OpenAI (cloud)",
-                    value         = LrView.bind("provider"),
-                    checked_value = "openai",
-                },
-                f:radio_button {
-                    title         = "Gemini (cloud)",
-                    value         = LrView.bind("provider"),
-                    checked_value = "gemini",
-                },
-            },
-
-            f:separator { fill_horizontal = 1 },
-
-            -- ═══════════════════════════════════════════════════════════
-            -- OLLAMA
-            -- ═══════════════════════════════════════════════════════════
-            f:group_box {
-                title           = "Ollama (local)",
+            f:tab_view {
+                value           = LrView.bind("provider"),
                 fill_horizontal = 1,
-                f:row {
-                    f:static_text {
-                        title     = "Status:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
-                    },
-                    f:static_text {
-                        title           = LrView.bind("ollamaStatus"),
-                        fill_horizontal = 1,
-                    },
-                    f:push_button {
-                        title   = LrView.bind("ollamaActionTitle"),
-                        action  = function()
-                            LrTasks.startAsyncTask(function()
-                                if not isOllamaInstalled() then
-                                    LrTasks.execute('open "https://ollama.com/download"')
-                                elseif not props._ollamaRunning then
-                                    LrTasks.execute('open -a Ollama')
-                                    LrTasks.sleep(3.0)
-                                end
-                                refreshOllamaState()
-                            end)
-                        end,
-                    },
-                },
-                f:row {
-                    f:static_text {
-                        title     = "URL:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
-                    },
-                    f:edit_field {
-                        value          = LrView.bind("ollamaUrl"),
-                        width_in_chars = 30,
-                    },
-                },
-                f:row {
-                    f:static_text {
-                        title     = "Model:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
-                    },
-                    f:popup_menu {
-                        value = LrView.bind("model"),
-                        items = LrView.bind("modelItems"),
-                    },
-                    f:push_button {
-                        title   = LrView.bind("installBtnTitle"),
-                        action  = function()
-                            LrTasks.startAsyncTask(function()
-                                local safeModel = props.model:gsub("[^%w%.%-%:_]", "")
-                                if isModelInstalled(props._installed, props.model) then
-                                    -- Uninstall: use login shell so PATH includes /usr/local/bin
-                                    local cmd = string.format(
-                                        "/bin/zsh -lc 'ollama rm %s' >/dev/null 2>&1", safeModel
-                                    )
-                                    LrTasks.execute(cmd)
-                                else
-                                    -- Install: open Terminal so user can watch progress
-                                    local cmd = string.format(
-                                        "osascript"
-                                        .. " -e 'tell application \"Terminal\"'"
-                                        .. " -e 'activate'"
-                                        .. " -e 'do script \"ollama pull %s\"'"
-                                        .. " -e 'end tell'",
-                                        safeModel
-                                    )
-                                    LrTasks.execute(cmd)
-                                end
-                                refreshOllamaState()
-                            end)
-                        end,
-                    },
-                },
-                f:row {
-                    f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
-                    },
-                    f:static_text {
-                        title           = LrView.bind("modelInfo"),
-                        text_color      = LrView.kDisabledColor,
-                        fill_horizontal = 1,
-                    },
-                },
-                f:row {
-                    f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
-                    },
-                    f:push_button {
-                        title  = "Compare models on GitHub →",
-                        action = function()
-                            LrTasks.execute('open "https://github.com/gibbonsr4/ai-keywords-lightroom#ollama-models"')
-                        end,
-                    },
-                },
-            },
 
-            -- ═══════════════════════════════════════════════════════════
-            -- CLAUDE API
-            -- ═══════════════════════════════════════════════════════════
-            f:group_box {
-                title           = "Claude API",
-                fill_horizontal = 1,
-                f:row {
-                    f:static_text {
-                        title     = "API Key:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
+                -- ── Ollama tab ────────────────────────────────────────
+                f:tab_view_item {
+                    identifier = "ollama",
+                    title      = "Ollama",
+
+                    f:row {
+                        f:static_text {
+                            title     = "Status:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:static_text {
+                            title           = LrView.bind("ollamaStatus"),
+                            fill_horizontal = 1,
+                        },
+                        f:push_button {
+                            title   = LrView.bind("ollamaActionTitle"),
+                            action  = function()
+                                LrTasks.startAsyncTask(function()
+                                    if not isOllamaInstalled() then
+                                        LrTasks.execute('open "https://ollama.com/download"')
+                                    elseif not props._ollamaRunning then
+                                        LrTasks.execute('open -a Ollama')
+                                        LrTasks.sleep(3.0)
+                                    end
+                                    refreshOllamaState()
+                                end)
+                            end,
+                        },
                     },
-                    f:edit_field {
-                        value           = LrView.bind("claudeApiKey"),
-                        width_in_chars  = 55,
-                        height_in_lines = 2,
+                    f:row {
+                        f:static_text {
+                            title     = "URL:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:edit_field {
+                            value          = LrView.bind("ollamaUrl"),
+                            width_in_chars = 30,
+                        },
                     },
-                },
-                f:row {
-                    f:static_text {
-                        title     = "Model:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
+                    f:row {
+                        f:static_text {
+                            title     = "Model:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:popup_menu {
+                            value = LrView.bind("model"),
+                            items = LrView.bind("modelItems"),
+                        },
+                        f:push_button {
+                            title   = LrView.bind("installBtnTitle"),
+                            action  = function()
+                                LrTasks.startAsyncTask(function()
+                                    local safeModel = props.model:gsub("[^%w%.%-%:_]", "")
+                                    if isModelInstalled(props._installed, props.model) then
+                                        -- Uninstall: use login shell so PATH includes /usr/local/bin
+                                        local cmd = string.format(
+                                            "/bin/zsh -lc 'ollama rm %s' >/dev/null 2>&1", safeModel
+                                        )
+                                        LrTasks.execute(cmd)
+                                    else
+                                        -- Install: open Terminal so user can watch progress
+                                        local cmd = string.format(
+                                            "osascript"
+                                            .. " -e 'tell application \"Terminal\"'"
+                                            .. " -e 'activate'"
+                                            .. " -e 'do script \"ollama pull %s\"'"
+                                            .. " -e 'end tell'",
+                                            safeModel
+                                        )
+                                        LrTasks.execute(cmd)
+                                    end
+                                    refreshOllamaState()
+                                end)
+                            end,
+                        },
                     },
-                    f:popup_menu {
-                        value = LrView.bind("claudeModel"),
-                        items = {
-                            { title = "Haiku 4.5 (~$0.002/image)",   value = "claude-haiku-4-5-20251001" },
-                            { title = "Sonnet 4.6 (~$0.007/image)",  value = "claude-sonnet-4-6" },
+                    f:row {
+                        f:static_text {
+                            title = "",
+                            width = LrView.share("label_width"),
+                        },
+                        f:static_text {
+                            title           = LrView.bind("modelInfo"),
+                            text_color      = LrView.kDisabledColor,
+                            fill_horizontal = 1,
+                        },
+                    },
+                    f:row {
+                        f:static_text {
+                            title = "",
+                            width = LrView.share("label_width"),
+                        },
+                        f:push_button {
+                            title  = "Compare models on GitHub →",
+                            action = function()
+                                LrTasks.execute('open "https://github.com/gibbonsr4/ai-keywords-lightroom#ollama-models"')
+                            end,
                         },
                     },
                 },
-                f:row {
-                    f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
-                    },
-                    f:static_text {
-                        title      = "Get your API key at console.anthropic.com",
-                        text_color = LrView.kDisabledColor,
-                    },
-                },
-            },
 
-            -- ═══════════════════════════════════════════════════════════
-            -- OPENAI API
-            -- ═══════════════════════════════════════════════════════════
-            f:group_box {
-                title           = "OpenAI API",
-                fill_horizontal = 1,
-                f:row {
-                    f:static_text {
-                        title     = "API Key:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
+                -- ── Claude tab ────────────────────────────────────────
+                f:tab_view_item {
+                    identifier = "claude",
+                    title      = "Claude",
+
+                    f:row {
+                        f:static_text {
+                            title     = "API Key:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:edit_field {
+                            value           = LrView.bind("claudeApiKey"),
+                            width_in_chars  = 55,
+                            height_in_lines = 2,
+                        },
                     },
-                    f:edit_field {
-                        value           = LrView.bind("openaiApiKey"),
-                        width_in_chars  = 55,
-                        height_in_lines = 2,
+                    f:row {
+                        f:static_text {
+                            title     = "Model:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:popup_menu {
+                            value = LrView.bind("claudeModel"),
+                            items = cloudModelItems(CLAUDE_MODELS),
+                        },
                     },
-                },
-                f:row {
-                    f:static_text {
-                        title     = "Model:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
-                    },
-                    f:popup_menu {
-                        value = LrView.bind("openaiModel"),
-                        items = {
-                            { title = "GPT-4o Mini (~$0.001/image)",  value = "gpt-4o-mini" },
-                            { title = "GPT-4o (~$0.005/image)",       value = "gpt-4o" },
+                    f:row {
+                        f:static_text {
+                            title = "",
+                            width = LrView.share("label_width"),
+                        },
+                        f:static_text {
+                            title      = "Get your API key at console.anthropic.com",
+                            text_color = LrView.kDisabledColor,
                         },
                     },
                 },
-                f:row {
-                    f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
-                    },
-                    f:static_text {
-                        title      = "Get your API key at platform.openai.com",
-                        text_color = LrView.kDisabledColor,
-                    },
-                },
-            },
 
-            -- ═══════════════════════════════════════════════════════════
-            -- GEMINI API
-            -- ═══════════════════════════════════════════════════════════
-            f:group_box {
-                title           = "Gemini API",
-                fill_horizontal = 1,
-                f:row {
-                    f:static_text {
-                        title     = "API Key:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
+                -- ── OpenAI tab ────────────────────────────────────────
+                f:tab_view_item {
+                    identifier = "openai",
+                    title      = "OpenAI",
+
+                    f:row {
+                        f:static_text {
+                            title     = "API Key:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:edit_field {
+                            value           = LrView.bind("openaiApiKey"),
+                            width_in_chars  = 55,
+                            height_in_lines = 2,
+                        },
                     },
-                    f:edit_field {
-                        value           = LrView.bind("geminiApiKey"),
-                        width_in_chars  = 55,
-                        height_in_lines = 2,
+                    f:row {
+                        f:static_text {
+                            title     = "Model:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:popup_menu {
+                            value = LrView.bind("openaiModel"),
+                            items = cloudModelItems(OPENAI_MODELS),
+                        },
                     },
-                },
-                f:row {
-                    f:static_text {
-                        title     = "Model:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
-                    },
-                    f:popup_menu {
-                        value = LrView.bind("geminiModel"),
-                        items = {
-                            { title = "Gemini 2.0 Flash (~$0.0005/image)",  value = "gemini-2.0-flash" },
-                            { title = "Gemini 2.5 Flash (~$0.001/image)",   value = "gemini-2.5-flash" },
-                            { title = "Gemini 2.5 Pro (~$0.005/image)",     value = "gemini-2.5-pro" },
+                    f:row {
+                        f:static_text {
+                            title = "",
+                            width = LrView.share("label_width"),
+                        },
+                        f:static_text {
+                            title      = "Get your API key at platform.openai.com",
+                            text_color = LrView.kDisabledColor,
                         },
                     },
                 },
-                f:row {
-                    f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
+
+                -- ── Gemini tab ────────────────────────────────────────
+                f:tab_view_item {
+                    identifier = "gemini",
+                    title      = "Gemini",
+
+                    f:row {
+                        f:static_text {
+                            title     = "API Key:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:edit_field {
+                            value           = LrView.bind("geminiApiKey"),
+                            width_in_chars  = 55,
+                            height_in_lines = 2,
+                        },
                     },
-                    f:static_text {
-                        title      = "Get your API key at aistudio.google.com",
-                        text_color = LrView.kDisabledColor,
+                    f:row {
+                        f:static_text {
+                            title     = "Model:",
+                            width     = LrView.share("label_width"),
+                            alignment = "right",
+                        },
+                        f:popup_menu {
+                            value = LrView.bind("geminiModel"),
+                            items = cloudModelItems(GEMINI_MODELS),
+                        },
+                    },
+                    f:row {
+                        f:static_text {
+                            title = "",
+                            width = LrView.share("label_width"),
+                        },
+                        f:static_text {
+                            title      = "Get your API key at aistudio.google.com",
+                            text_color = LrView.kDisabledColor,
+                        },
                     },
                 },
             },
@@ -535,18 +512,6 @@ LrTasks.startAsyncTask(function()
                 },
                 f:row {
                     f:static_text {
-                        title     = "Timeout:",
-                        width     = LrView.share("label_width"),
-                        alignment = "right",
-                    },
-                    f:edit_field {
-                        value          = LrView.bind("timeoutSecs"),
-                        width_in_chars = 5,
-                    },
-                    f:static_text { title = "seconds per image" },
-                },
-                f:row {
-                    f:static_text {
                         title     = "Parent keyword:",
                         width     = LrView.share("label_width"),
                         alignment = "right",
@@ -555,16 +520,8 @@ LrTasks.startAsyncTask(function()
                         value          = LrView.bind("parentKeyword"),
                         width_in_chars = 25,
                     },
-                },
-                f:row {
                     f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
-                    },
-                    f:static_text {
-                        title      = "Nests all AI keywords under this parent in the Keyword List.\n" ..
-                                     "Leave blank for flat keywords. Example: \"AI Generated\"\n" ..
-                                     "Useful for organizing, bulk-deleting, or distinguishing AI tags.",
+                        title      = "Nests AI keywords under this parent. Leave blank for flat.",
                         text_color = LrView.kDisabledColor,
                     },
                 },
@@ -581,11 +538,21 @@ LrTasks.startAsyncTask(function()
             },
 
             -- ═══════════════════════════════════════════════════════════
-            -- AI PROMPT
+            -- CONTEXT & INSTRUCTIONS
             -- ═══════════════════════════════════════════════════════════
             f:group_box {
-                title           = "AI Prompt",
+                title           = "Context & Instructions",
                 fill_horizontal = 1,
+                f:row {
+                    f:static_text {
+                        title = "",
+                        width = LrView.share("label_width"),
+                    },
+                    f:checkbox {
+                        title = "Use GPS coordinates from photo metadata",
+                        value = LrView.bind("useGPS"),
+                    },
+                },
                 f:row {
                     f:static_text {
                         title = "",
@@ -598,34 +565,17 @@ LrTasks.startAsyncTask(function()
                 },
                 f:row {
                     f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
-                    },
-                    f:static_text {
-                        title      = "When enabled, folder names (e.g. Costa Rica > Monteverde)\n" ..
-                                     "are prepended to the prompt as location/subject context.",
-                        text_color = LrView.kDisabledColor,
-                    },
-                },
-                f:row {
-                    f:static_text {
                         title     = "Folder aliases:",
                         width     = LrView.share("label_width"),
                         alignment = "right",
                     },
                     f:edit_field {
-                        value          = LrView.bind("folderAliases"),
-                        width_in_chars = 45,
-                    },
-                },
-                f:row {
-                    f:static_text {
-                        title = "",
-                        width = LrView.share("label_width"),
+                        value           = LrView.bind("folderAliases"),
+                        width_in_chars  = 45,
+                        height_in_lines = 3,
                     },
                     f:static_text {
-                        title      = "Expand short folder names. Semicolon-separated:\n" ..
-                                     "DR=Dominican Republic; CR=Costa Rica; PR=Puerto Rico",
+                        title      = "One per line or comma-separated:\nDR=Dominican Republic\nCR=Costa Rica",
                         text_color = LrView.kDisabledColor,
                     },
                 },
@@ -648,11 +598,21 @@ LrTasks.startAsyncTask(function()
                         width = LrView.share("label_width"),
                     },
                     f:static_text {
-                        title      = "The base prompt already handles keyword style (atomic, singular,\n" ..
-                                     "composition, colors, etc.). Use this for domain-specific guidance.\n" ..
-                                     "Leave blank for general-purpose keywording.",
+                        title      = "Optional domain-specific guidance. Base prompt handles keyword style automatically.",
                         text_color = LrView.kDisabledColor,
                     },
+                },
+                f:row {
+                    f:static_text {
+                        title     = "Timeout:",
+                        width     = LrView.share("label_width"),
+                        alignment = "right",
+                    },
+                    f:edit_field {
+                        value          = LrView.bind("timeoutSecs"),
+                        width_in_chars = 5,
+                    },
+                    f:static_text { title = "seconds per image" },
                 },
             },
 
@@ -799,6 +759,7 @@ LrTasks.startAsyncTask(function()
             prefs.geminiModel      = props.geminiModel
             prefs.maxKeywords      = math.floor(maxKw)
             prefs.timeoutSecs      = math.floor(timeout)
+            prefs.useGPS           = props.useGPS
             prefs.useFolderContext = props.useFolderContext
             prefs.skipKeyworded    = props.skipKeyworded
             prefs.parentKeyword    = props.parentKeyword

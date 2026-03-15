@@ -2,8 +2,8 @@
   GenerateKeywords.lua
   ─────────────────────────────────────────────────────────────────────────────
   Iterates over selected Lightroom Classic photos, renders each one via
-  LrExportSession, sends to Ollama or Claude API, parses keywords, and
-  writes them to the LR catalog.
+  LrExportSession, sends to AI provider (Ollama/Claude/OpenAI/Gemini),
+  parses keywords, and writes them to the LR catalog.
 
   macOS only. Settings via Library > Plugin Extras > Settings...
 --]]
@@ -24,7 +24,7 @@ local Prefs  = dofile(_PLUGIN.path .. '/Prefs.lua')
 -- Writes incrementally so crash mid-run still captures everything up to that point.
 local Logger = {}
 
-function Logger:init(settings)
+function Logger:init(settings, photoCount)
     self.enabled = settings.enableLogging
     self.fileHandle = nil
     self.startTime = LrDate.currentTime()
@@ -47,24 +47,35 @@ function Logger:init(settings)
     self.filePath = folder .. "/AI_Keywords_" .. timestamp .. ".log"
     self.fileHandle = io.open(self.filePath, "w")
 
+    -- Compact header
     self:log("═══════════════════════════════════════════════════════════")
     self:log("AI Keywords — Run started at " .. LrDate.timeToUserFormat(self.startTime, "%Y-%m-%d %H:%M:%S"))
-    self:log("Provider: " .. settings.provider)
+
+    local modelName
     if settings.provider == "ollama" then
-        self:log("Model: " .. settings.model)
-        self:log("Ollama URL: " .. settings.ollamaUrl)
+        modelName = settings.model
     elseif settings.provider == "claude" then
-        self:log("Model: " .. settings.claudeModel)
+        modelName = settings.claudeModel
     elseif settings.provider == "openai" then
-        self:log("Model: " .. settings.openaiModel)
+        modelName = settings.openaiModel
     elseif settings.provider == "gemini" then
-        self:log("Model: " .. settings.geminiModel)
+        modelName = settings.geminiModel
     end
-    self:log("Max keywords: " .. tostring(settings.maxKeywords))
-    self:log("Keyword case: " .. settings.keywordCase)
-    self:log("Parent keyword: " .. (settings.parentKeyword ~= "" and settings.parentKeyword or "(none)"))
-    self:log("Folder context: " .. tostring(settings.useFolderContext))
-    self:log("Skip keyworded: " .. tostring(settings.skipKeyworded))
+    self:log(string.format("Provider: %s  |  Model: %s", settings.provider, modelName or "unknown"))
+    self:log(string.format("Processing %d photos  |  Max keywords: %d  |  Case: %s",
+        photoCount, settings.maxKeywords, settings.keywordCase))
+    self:log(string.format("Parent keyword: %s  |  Skip keyworded: %s",
+        (settings.parentKeyword ~= "" and settings.parentKeyword or "(none)"),
+        tostring(settings.skipKeyworded)))
+    self:log(string.format("Folder context: %s  |  GPS context: %s",
+        settings.useFolderContext and "enabled" or "disabled",
+        settings.useGPS and "enabled" or "disabled"))
+
+    local custom = settings.prompt or ""
+    if custom ~= "" then
+        self:log("Custom instructions: " .. custom)
+    end
+
     self:log("═══════════════════════════════════════════════════════════")
 end
 
@@ -82,20 +93,34 @@ function Logger:log(message)
     self:_writeRaw(line)
 end
 
-function Logger:logImage(filename, result, detail)
+function Logger:logImageStart(index, total, filename)
     if not self.enabled then return end
+    self:_writeRaw("\n")
+    self:log(string.format("[%d/%d] %s", index, total, filename))
+end
+
+function Logger:logDetail(label, value)
+    if not self.enabled then return end
+    local ts = LrDate.timeToUserFormat(LrDate.currentTime(), "%H:%M:%S")
+    self:_writeRaw(string.format("%s         %s: %s\n", ts, label, value))
+end
+
+function Logger:logResult(result, detail)
+    if not self.enabled then return end
+    local ts = LrDate.timeToUserFormat(LrDate.currentTime(), "%H:%M:%S")
     if result == "success" then
-        self:log("[OK]    " .. filename .. "  →  " .. detail)
+        self:_writeRaw(string.format("%s         ✓ %s\n", ts, detail))
     elseif result == "skipped" then
-        self:log("[SKIP]  " .. filename .. "  →  " .. detail)
+        self:_writeRaw(string.format("%s         SKIP — %s\n", ts, detail))
     else
-        self:log("[FAIL]  " .. filename .. "  →  " .. detail)
+        self:_writeRaw(string.format("%s         ERROR — %s\n", ts, detail))
     end
 end
 
 function Logger:finish(successCount, errorCount, skippedCount)
     if not self.enabled then return end
     local elapsed = LrDate.currentTime() - self.startTime
+    self:_writeRaw("\n")
     self:log("═══════════════════════════════════════════════════════════")
     self:log(string.format("Run complete — %d keyworded, %d errors, %d skipped (%.0fs elapsed)",
         successCount, errorCount, skippedCount, elapsed))
@@ -231,16 +256,10 @@ LrTasks.startAsyncTask(function()
 
         -- Initialize logger
         local log = setmetatable({}, { __index = Logger })
-        log:init(SETTINGS)
+        log:init(SETTINGS, #toProcess)
 
         -- Parse folder aliases once (not per-image)
         local folderAliases = Engine.parseAliases(SETTINGS.folderAliases)
-
-        -- Log prompts once (without per-image context)
-        log:log("Base prompt: (built-in keywording prompt)")
-        if SETTINGS.prompt ~= "" then
-            log:log("Custom instructions: " .. SETTINGS.prompt)
-        end
 
         local modelName, providerLabel
         if SETTINGS.provider == "claude" then
@@ -267,7 +286,7 @@ LrTasks.startAsyncTask(function()
 
         for i, photo in ipairs(toProcess) do
             if progress:isCanceled() then
-                log:log("Run canceled by user at image " .. i)
+                log:log("CANCELED by user at image " .. i)
                 break
             end
 
@@ -284,11 +303,15 @@ LrTasks.startAsyncTask(function()
                 if existingKw and #existingKw > 0 then
                     skippedKwCount = skippedKwCount + 1
                     shouldSkip = true
-                    log:logImage(filename, "skipped", "already has " .. #existingKw .. " keywords")
+                    log:logImageStart(i, #toProcess, filename)
+                    log:logResult("skipped", "already has " .. #existingKw .. " keywords")
                 end
             end
 
             if not shouldSkip then
+
+            -- Log image start
+            log:logImageStart(i, #toProcess, filename)
 
             -- Build folder hint
             local folderHint = nil
@@ -296,14 +319,18 @@ LrTasks.startAsyncTask(function()
                 local parts = Engine.getFolderContext(photo, catalog, folderAliases)
                 if #parts > 0 then
                     folderHint = table.concat(parts, " > ")
+                    log:logDetail("Folder", folderHint)
                 end
             end
 
-            -- Extract GPS coordinates if available
+            -- Extract GPS coordinates if enabled and available
             local gpsInfo = nil
-            local gps = photo:getRawMetadata('gps')
-            if gps and gps.latitude and gps.longitude then
-                gpsInfo = { latitude = gps.latitude, longitude = gps.longitude }
+            if SETTINGS.useGPS then
+                local gps = photo:getRawMetadata('gps')
+                if gps and gps.latitude and gps.longitude then
+                    gpsInfo = { latitude = gps.latitude, longitude = gps.longitude }
+                    log:logDetail("GPS", string.format("%.4f, %.4f", gpsInfo.latitude, gpsInfo.longitude))
+                end
             end
 
             -- Query AI model (render + send + parse)
@@ -311,17 +338,10 @@ LrTasks.startAsyncTask(function()
             local keywords, rawResponse, err = queryModel(photo, folderHint, gpsInfo, SETTINGS, i)
             local queryElapsed = LrDate.currentTime() - queryStart
 
-            -- Log per-image context, raw response, and timing
-            if folderHint then
-                log:log(string.format("  Folder context: %s", folderHint))
-            end
-            if gpsInfo then
-                log:log(string.format("  GPS: %.4f, %.4f", gpsInfo.latitude, gpsInfo.longitude))
-            end
             if rawResponse then
-                log:log(string.format("  Raw response: %s", rawResponse:sub(1, 500)))
+                log:logDetail("Response", rawResponse:sub(1, 500))
             end
-            log:log(string.format("  Query time: %.1fs", queryElapsed))
+            log:logDetail("Time", string.format("%.1fs", queryElapsed))
 
             if keywords then
                 -- Write keywords to catalog
@@ -336,14 +356,14 @@ LrTasks.startAsyncTask(function()
 
                 if writeOk then
                     successCount = successCount + 1
-                    log:logImage(filename, "success", table.concat(keywords, ", "))
+                    log:logResult("success", #keywords .. " keywords written: " .. table.concat(keywords, ", "))
                 else
                     table.insert(errorLog, "- " .. filename .. "\n  Write error: " .. tostring(writeErr))
-                    log:logImage(filename, "error", "Write failed: " .. tostring(writeErr))
+                    log:logResult("error", "Write failed: " .. tostring(writeErr))
                 end
             else
                 table.insert(errorLog, "- " .. filename .. "\n  " .. (err or "unknown error"))
-                log:logImage(filename, "error", err or "unknown error")
+                log:logResult("error", err or "unknown error")
             end
 
             end -- if not shouldSkip
@@ -357,7 +377,7 @@ LrTasks.startAsyncTask(function()
         log:finish(successCount, #errorLog, skippedKwCount)
 
         -- Build completion message
-        local lines = { string.format("%d photo(s) keyworded via %s", successCount, providerLabel) }
+        local lines = { string.format("%d photo(s) keyworded via %s (%s)", successCount, providerLabel, modelName) }
         if skippedKwCount > 0 then
             lines[#lines + 1] = string.format("%d photo(s) skipped (already keyworded)", skippedKwCount)
         end

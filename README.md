@@ -139,8 +139,9 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 
 > **Note:** If a keyword with the same name already exists at the root level (from a previous run without a parent), the plugin may create a second keyword with the same name under the parent. This is a Lightroom SDK limitation. To avoid duplicates, delete root-level AI keywords before switching to a parent keyword.
 
-### Other Options
+### Context & Instructions
 
+- **GPS coordinates:** When enabled (default), GPS coordinates from photo EXIF are sent to the model for location-aware keywording. Disable for privacy.
 - **Folder context:** When enabled, catalog folder names (e.g. `Dominican Republic > Santo Domingo`) are passed to the model as location hints. Generic folder names like "Photos" and "Imports" are filtered out.
 - **Folder aliases:** Expand short folder names (e.g. `DR=Dominican Republic; CR=Costa Rica`).
 - **Custom instructions:** Optional additional prompt instructions for domain-specific guidance (e.g. "Focus on architecture and design elements"). The built-in base prompt handles keyword style automatically.

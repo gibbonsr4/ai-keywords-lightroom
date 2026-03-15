@@ -66,6 +66,24 @@ M.VISION_MODELS = {
     { value = "moondream",            label = "Moondream 2",            info = "~1GB RAM  |  Tiny, fast, basic keywords only" },
 }
 
+-- ── Cloud provider models ───────────────────────────────────────────────
+-- Shared by Config.lua (dropdowns) and CompareModels.lua (checkboxes).
+M.CLAUDE_MODELS = {
+    { value = "claude-haiku-4-5-20251001", label = "Claude Haiku 4.5",  cost = "~$0.002" },
+    { value = "claude-sonnet-4-6",         label = "Claude Sonnet 4.6", cost = "~$0.007" },
+}
+
+M.OPENAI_MODELS = {
+    { value = "gpt-4o-mini", label = "GPT-4o Mini",  cost = "~$0.001" },
+    { value = "gpt-4o",      label = "GPT-4o",       cost = "~$0.005" },
+}
+
+M.GEMINI_MODELS = {
+    { value = "gemini-2.0-flash", label = "Gemini 2.0 Flash", cost = "~$0.0005" },
+    { value = "gemini-2.5-flash", label = "Gemini 2.5 Flash", cost = "~$0.001" },
+    { value = "gemini-2.5-pro",   label = "Gemini 2.5 Pro",   cost = "~$0.005" },
+}
+
 -- ── Remote model list URL ───────────────────────────────────────────────
 M.MODELS_JSON_URL =
     "https://raw.githubusercontent.com/gibbonsr4/ai-keywords-lightroom/main/models.json"
@@ -243,7 +261,7 @@ end
 function M.parseAliases(aliasStr)
     local aliases = {}
     if not aliasStr or aliasStr == "" then return aliases end
-    for entry in aliasStr:gmatch("[^;]+") do
+    for entry in aliasStr:gmatch("[^;,\n\r]+") do
         local key, val = entry:match("^%s*(.-)%s*=%s*(.-)%s*$")
         if key and val and key ~= "" and val ~= "" then
             aliases[key:lower()] = val

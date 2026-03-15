@@ -20,22 +20,10 @@ local LrView            = import 'LrView'
 local Engine = dofile(_PLUGIN.path .. '/AIEngine.lua')
 local Prefs  = dofile(_PLUGIN.path .. '/Prefs.lua')
 
--- ── Cloud models available for comparison ──────────────────────────────────
-local CLAUDE_MODELS = {
-    { value = "claude-haiku-4-5-20251001", label = "Claude Haiku 4.5",  cost = "~$0.002" },
-    { value = "claude-sonnet-4-6",         label = "Claude Sonnet 4.6", cost = "~$0.007" },
-}
-
-local OPENAI_MODELS = {
-    { value = "gpt-4o-mini", label = "GPT-4o Mini",  cost = "~$0.001" },
-    { value = "gpt-4o",      label = "GPT-4o",       cost = "~$0.005" },
-}
-
-local GEMINI_MODELS = {
-    { value = "gemini-2.0-flash", label = "Gemini 2.0 Flash", cost = "~$0.0005" },
-    { value = "gemini-2.5-flash", label = "Gemini 2.5 Flash", cost = "~$0.001" },
-    { value = "gemini-2.5-pro",   label = "Gemini 2.5 Pro",   cost = "~$0.005" },
-}
+-- Cloud model lists from shared AIEngine module
+local CLAUDE_MODELS = Engine.CLAUDE_MODELS
+local OPENAI_MODELS = Engine.OPENAI_MODELS
+local GEMINI_MODELS = Engine.GEMINI_MODELS
 
 -- ── Build the model selection dialog ──────────────────────────────────────
 -- Returns a list of selected models [{provider, model, label}] or nil if canceled.
@@ -226,7 +214,7 @@ local function showSelectionDialog(photo, settings)
         -- Ollama section
         if #ollamaRows > 0 then
             local ollamaGroup = {
-                title           = "Ollama Models (installed)",
+                title           = "Ollama",
                 fill_horizontal = 1,
             }
             for _, row in ipairs(ollamaRows) do
@@ -238,7 +226,7 @@ local function showSelectionDialog(photo, settings)
         -- Claude section
         if #claudeRows > 0 then
             local claudeGroup = {
-                title           = "Claude API",
+                title           = "Claude",
                 fill_horizontal = 1,
             }
             for _, row in ipairs(claudeRows) do
@@ -250,7 +238,7 @@ local function showSelectionDialog(photo, settings)
         -- OpenAI section
         if #openaiRows > 0 then
             local openaiGroup = {
-                title           = "OpenAI API",
+                title           = "OpenAI",
                 fill_horizontal = 1,
             }
             for _, row in ipairs(openaiRows) do
@@ -262,7 +250,7 @@ local function showSelectionDialog(photo, settings)
         -- Gemini section
         if #geminiRows > 0 then
             local geminiGroup = {
-                title           = "Gemini API",
+                title           = "Gemini",
                 fill_horizontal = 1,
             }
             for _, row in ipairs(geminiRows) do
@@ -375,9 +363,11 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
     end
 
     local gpsInfo = nil
-    local gps = photo:getRawMetadata('gps')
-    if gps and gps.latitude and gps.longitude then
-        gpsInfo = { latitude = gps.latitude, longitude = gps.longitude }
+    if settings.useGPS then
+        local gps = photo:getRawMetadata('gps')
+        if gps and gps.latitude and gps.longitude then
+            gpsInfo = { latitude = gps.latitude, longitude = gps.longitude }
+        end
     end
 
     -- Build prompt (using override if provided)
@@ -480,11 +470,23 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
 end
 
 -- ── Show results dialog ──────────────────────────────────────────────────
+-- Returns true if the user wants to compare again, false otherwise.
 local function showResults(photo, results, promptOverride)
     local f = LrView.osFactory()
 
     local path     = photo:getRawMetadata('path')
     local filename = LrPathUtils.leafName(path)
+
+    -- Keyword overlap analysis — build before columns so we can mark unique
+    local allKeywords = {}  -- keyword (lowercase) -> count of models that have it
+    for _, r in ipairs(results) do
+        if not r.error then
+            for _, kw in ipairs(r.keywords) do
+                local key = kw:lower()
+                allKeywords[key] = (allKeywords[key] or 0) + 1
+            end
+        end
+    end
 
     -- Build a column for each model's results
     local columns = {}
@@ -493,7 +495,17 @@ local function showResults(photo, results, promptOverride)
         if r.error then
             kwText = "⚠ " .. r.error
         elseif #r.keywords > 0 then
-            kwText = table.concat(r.keywords, "\n")
+            -- Mark unique keywords (only found by this model) with ★
+            local lines = {}
+            for _, kw in ipairs(r.keywords) do
+                local key = kw:lower()
+                if allKeywords[key] == 1 then
+                    table.insert(lines, kw .. "  ★")
+                else
+                    table.insert(lines, kw)
+                end
+            end
+            kwText = table.concat(lines, "\n")
         else
             kwText = "(no keywords)"
         end
@@ -523,22 +535,10 @@ local function showResults(photo, results, promptOverride)
         })
     end
 
-    -- Keyword overlap analysis
-    local allKeywords = {}  -- keyword -> list of model labels
-    for _, r in ipairs(results) do
-        if not r.error then
-            for _, kw in ipairs(r.keywords) do
-                local key = kw:lower()
-                if not allKeywords[key] then allKeywords[key] = {} end
-                table.insert(allKeywords[key], r.label)
-            end
-        end
-    end
-
     -- Find shared keywords (appear in 2+ models)
     local shared = {}
-    for kw, models in pairs(allKeywords) do
-        if #models >= 2 then
+    for kw, count in pairs(allKeywords) do
+        if count >= 2 then
             table.insert(shared, kw)
         end
     end
@@ -591,14 +591,21 @@ local function showResults(photo, results, promptOverride)
             fill_horizontal = 1,
             height_in_lines = 2,
         },
+        f:static_text {
+            title      = "★ = unique to this model",
+            text_color = LrView.kDisabledColor,
+        },
     }
 
-    LrDialogs.presentModalDialog {
+    local result = LrDialogs.presentModalDialog {
         title      = "Compare Models — Results",
         contents   = contents,
-        actionVerb = "Done",
+        actionVerb = "Compare Again",
+        otherVerb  = "Done",
         cancelVerb = "< exclude",
     }
+
+    return result == "ok"  -- "ok" = Compare Again, "other" = Done
 end
 
 -- ── Entry point ──────────────────────────────────────────────────────────
@@ -634,16 +641,22 @@ LrTasks.startAsyncTask(function()
             return
         end
 
-        -- Show model selection dialog
-        local selectedModels, promptOverride = showSelectionDialog(photo, SETTINGS)
-        if not selectedModels then return end
+        -- Compare loop — allows "Compare Again" from results
+        local compareAgain = true
+        while compareAgain do
+            -- Show model selection dialog
+            local selectedModels, promptOverride = showSelectionDialog(photo, SETTINGS)
+            if not selectedModels then return end
 
-        -- Run comparison
-        local results = runComparison(photo, selectedModels, SETTINGS, promptOverride, context)
+            -- Run comparison
+            local results = runComparison(photo, selectedModels, SETTINGS, promptOverride, context)
 
-        -- Show results
-        if #results > 0 then
-            showResults(photo, results, promptOverride)
+            -- Show results (returns true if user clicked "Compare Again")
+            if #results > 0 then
+                compareAgain = showResults(photo, results, promptOverride)
+            else
+                compareAgain = false
+            end
         end
 
     end)
