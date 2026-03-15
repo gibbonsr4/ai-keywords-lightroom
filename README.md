@@ -66,7 +66,7 @@ Open **Library → Plug-in Extras → Settings…** to configure. The Save butto
 
 ### Provider
 
-Choose between **Ollama (local)**, **Claude API**, **OpenAI**, and **Gemini** via radio buttons.
+Choose between **Ollama (local)**, **Claude API**, **OpenAI**, and **Gemini** via tabs.
 
 ### Ollama Settings
 

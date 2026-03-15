@@ -17,17 +17,17 @@
 
 ## Feature Roadmap
 
-Detailed task breakdowns and progress are tracked in [GitHub Issues](https://github.com/rgibbons-dev/ai-keywords-lightroom/issues).
+Detailed task breakdowns and progress are tracked in [GitHub Issues](https://github.com/gibbonsr4/ai-keywords-lightroom/issues).
 
 | Priority | Feature | Issue | Summary |
 |---|---|---|---|
-| Next | Metadata expansion | [#2](https://github.com/rgibbons-dev/ai-keywords-lightroom/issues/2) | Generate IPTC titles, captions, and alt text — the image is already being sent to the AI |
-| Next | Controlled vocabulary | [#3](https://github.com/rgibbons-dev/ai-keywords-lightroom/issues/3) | Map AI output to a curated vocabulary with LR synonym support |
-| Future | Hierarchical keywords | [#4](https://github.com/rgibbons-dev/ai-keywords-lightroom/issues/4) | Categorized keywords that create proper LR keyword hierarchies |
-| Future | Semantic search | [#5](https://github.com/rgibbons-dev/ai-keywords-lightroom/issues/5) | Natural language photo search (separate architecture — backend + vector DB) |
-| Future | Cost tracking | [#6](https://github.com/rgibbons-dev/ai-keywords-lightroom/issues/6) | Parse token usage from API responses and display per-run costs |
-| Future | Windows support | [#7](https://github.com/rgibbons-dev/ai-keywords-lightroom/issues/7) | Replace macOS-specific commands; core plugin is already cross-platform |
-| Backlog | Encrypted API keys | [#1](https://github.com/rgibbons-dev/ai-keywords-lightroom/issues/1) | Use LrPasswords for secure API key storage |
+| Next | Metadata expansion | [#2](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/2) | Generate IPTC titles, captions, and alt text — the image is already being sent to the AI |
+| Next | Controlled vocabulary | [#3](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/3) | Map AI output to a curated vocabulary with LR synonym support |
+| Future | Hierarchical keywords | [#4](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/4) | Categorized keywords that create proper LR keyword hierarchies |
+| Future | Semantic search | [#5](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/5) | Natural language photo search (separate architecture — backend + vector DB) |
+| Future | Cost tracking | [#6](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/6) | Parse token usage from API responses and display per-run costs |
+| Future | Windows support | [#7](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/7) | Replace macOS-specific commands; core plugin is already cross-platform |
+| Backlog | Encrypted API keys | [#1](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/1) | Use LrPasswords for secure API key storage |
 
 ---
 
@@ -53,23 +53,8 @@ buildPrompt() assembles: `[GPS/folder context] + [BASE_PROMPT] + [user custom in
 
 ---
 
-## Competitive Landscape
+## Key Differentiators
 
-### LrGeniusAI (free, open source)
-- **Pros:** Semantic search, titles/descriptions/alt text, 4 providers (ChatGPT, Gemini, Ollama, LM Studio), face workflows
-- **Cons:** Complex setup (backend server required), no Claude support, no GPS context, no folder aliases
-- **Architecture:** LR plugin + separate backend server + local database
-
-### Excire Search (~$104)
-- **Pros:** Deep LR integration, face recognition, text-prompt search, AI culling, in-house AI model
-- **Cons:** Proprietary, no cloud AI option, can't leverage latest models
-- **Architecture:** Native LR plugin with bundled AI model
-
-### Peakto
-- **Pros:** Multi-app host (LR Classic, Apple Photos, etc.), automatic keywording
-- **Cons:** Separate application, not a LR plugin
-
-### Our Advantages
 1. 4 AI providers — Claude, OpenAI, Gemini, Ollama (local)
 2. GPS + folder context — location-aware keywording
 3. Simple install — no backend server, no database

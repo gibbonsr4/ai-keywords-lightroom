@@ -359,7 +359,7 @@ end
 
 -- ── Prepare image for API ────────────────────────────────────────────────
 -- Renders via LrExportSession at provider-appropriate size, reads,
--- base64-encodes. For Claude, retries at smaller dimensions if needed.
+-- base64-encodes. For cloud providers, retries at smaller dimensions if needed.
 function M.prepareImage(photo, ts, provider)
     -- Check minimum dimensions
     local dims = photo:getRawMetadata('croppedDimensions')
@@ -372,7 +372,7 @@ function M.prepareImage(photo, ts, provider)
     end
 
     -- Provider-appropriate render size:
-    -- Claude: 1568px per Anthropic's recommendation for best accuracy
+    -- Cloud: 1568px for best accuracy (Anthropic's recommendation, works well for all)
     -- Ollama: 1024px (local models work well at this size)
     local renderDim = (provider == "ollama") and 1024 or 1568
 
