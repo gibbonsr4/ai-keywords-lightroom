@@ -711,7 +711,6 @@ function M.queryClaude(img, prompt, claudeModel, apiKey, timeoutSecs)
         output_config = {
             format = {
                 type   = "json_schema",
-                name   = "keywords",
                 schema = M.KEYWORD_SCHEMA,
             },
         },
