@@ -35,7 +35,7 @@ end
 -- Cloud API base64 image limit ~5MB. Base64 is ~4/3 of raw, so raw limit ~3.75MB.
 M.CLOUD_MAX_RAW_BYTES = 3750000
 
--- JSON schema for structured output (cloud providers only)
+-- JSON schema for structured output (Claude/OpenAI require additionalProperties)
 M.KEYWORD_SCHEMA = {
     type = "object",
     properties = {
@@ -46,6 +46,18 @@ M.KEYWORD_SCHEMA = {
     },
     required = { "keywords" },
     additionalProperties = false,
+}
+
+-- Gemini rejects additionalProperties — use a separate schema
+M.KEYWORD_SCHEMA_GEMINI = {
+    type = "object",
+    properties = {
+        keywords = {
+            type  = "array",
+            items = { type = "string" },
+        },
+    },
+    required = { "keywords" },
 }
 
 -- Minimum image dimension — images smaller than this won't produce useful keywords
@@ -837,7 +849,7 @@ function M.queryGemini(img, prompt, geminiModel, apiKey, timeoutSecs)
         }},
         generationConfig = {
             responseMimeType = "application/json",
-            responseSchema   = M.KEYWORD_SCHEMA,
+            responseSchema   = M.KEYWORD_SCHEMA_GEMINI,
         },
     })
     if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
