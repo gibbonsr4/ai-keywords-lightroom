@@ -23,6 +23,19 @@ M.TEMP_DIR = os.getenv("TMPDIR") or "/tmp"
 -- Cloud API base64 image limit ~5MB. Base64 is ~4/3 of raw, so raw limit ~3.75MB.
 M.CLOUD_MAX_RAW_BYTES = 3750000
 
+-- JSON schema for structured output (cloud providers only)
+M.KEYWORD_SCHEMA = {
+    type = "object",
+    properties = {
+        keywords = {
+            type  = "array",
+            items = { type = "string" },
+        },
+    },
+    required = { "keywords" },
+    additionalProperties = false,
+}
+
 -- Minimum image dimension — images smaller than this won't produce useful keywords
 M.MIN_IMAGE_DIMENSION = 200
 
@@ -53,8 +66,8 @@ M.SKIP_FOLDERS = {
 }
 
 -- ── Recommended vision models for Ollama ──────────────────────────────────
--- This hardcoded list is the offline fallback.  On Settings open the plugin
--- fetches models.json from the GitHub repo for an up-to-date list.
+-- Bundled list — ships with the plugin.  Users can check for updates via
+-- the "Check for New Models" button in Settings (fetches models.json).
 M.VISION_MODELS = {
     { value = "gemma3:4b",            label = "Gemma 3 4B",             info = "~3GB RAM  |  Popular, versatile vision model" },
     { value = "qwen2.5vl:3b",        label = "Qwen2.5-VL 3B",          info = "~2GB RAM  |  Fastest, good quality  |  Requires Ollama 0.7+" },
@@ -84,7 +97,7 @@ M.GEMINI_MODELS = {
     { value = "gemini-2.5-pro",        label = "Gemini 2.5 Pro",        cost = "~$0.005" },
 }
 
--- ── Remote model list URL ───────────────────────────────────────────────
+-- ── Remote model list URL (opt-in refresh via Settings) ──────────────
 M.MODELS_JSON_URL =
     "https://raw.githubusercontent.com/gibbonsr4/ai-keywords-lightroom/main/models.json"
 
@@ -413,7 +426,7 @@ function M.prepareImage(photo, ts, provider)
     }, nil
 end
 
--- ── Base keywording prompt (not user-editable) ────────────────────────────
+-- ── Base keywording prompt (default — user can override in Settings > Advanced) ──
 -- Contains keyword style rules, best practices, and guardrails based on
 -- stock photography standards. User customization goes in settings.prompt.
 M.BASE_PROMPT =
@@ -439,7 +452,11 @@ M.BASE_PROMPT =
 
 -- ── Build prompt with folder context and GPS ─────────────────────────────
 function M.buildPrompt(settings, folderHint, gpsInfo)
-    local prompt = M.BASE_PROMPT
+    local basePrompt = settings.basePrompt
+    if not basePrompt or basePrompt == "" then
+        basePrompt = M.BASE_PROMPT
+    end
+    local prompt = basePrompt
 
     -- Prepend location context
     local contextParts = {}
@@ -475,7 +492,35 @@ function M.buildPrompt(settings, folderHint, gpsInfo)
 end
 
 -- ── Parse keywords from model output ─────────────────────────────────────
+-- Tries JSON first (structured output from cloud providers), falls back to CSV.
 function M.parseKeywords(raw, settings)
+    -- Try JSON: {"keywords":["..."]} or bare ["..."]
+    local ok, decoded = pcall(function() return json.decode(raw) end)
+    if ok and type(decoded) == "table" then
+        local arr = nil
+        if type(decoded.keywords) == "table" then
+            arr = decoded.keywords
+        elseif #decoded > 0 and type(decoded[1]) == "string" then
+            arr = decoded
+        end
+        if arr then
+            local keywords = {}
+            local seen = {}
+            for _, kw in ipairs(arr) do
+                local t = M.trim(tostring(kw))
+                t = M.normalizeCase(t, settings.keywordCase)
+                local key = t:lower()
+                if #t > 1 and #t < 80 and not seen[key] then
+                    seen[key] = true
+                    table.insert(keywords, t)
+                end
+                if #keywords >= settings.maxKeywords then break end
+            end
+            if #keywords > 0 then return keywords end
+        end
+    end
+
+    -- Fallback: CSV/newline parsing (Ollama and non-structured responses)
     local keywords = {}
     local seen = {}
     for kw in raw:gmatch("[^,\n]+") do
@@ -512,14 +557,19 @@ end
 -- Writes a curl config file with headers/URL/method, then invokes curl with
 -- only controlled temp file paths on the command line. This prevents shell
 -- injection and keeps sensitive values (API keys) out of the process list.
+-- Escape a value for use inside double quotes in a curl config file.
+local function escapeCurlConfigValue(s)
+    return s:gsub('\\', '\\\\'):gsub('"', '\\"')
+end
+
 function M.writeCurlConfig(cfgPath, url, headers, timeoutSecs)
     local fh = io.open(cfgPath, "w")
     if not fh then return false end
     fh:write("-s\n")
     fh:write("-X POST\n")
-    fh:write(string.format('url = "%s"\n', url))
+    fh:write(string.format('url = "%s"\n', escapeCurlConfigValue(url)))
     for _, h in ipairs(headers) do
-        fh:write(string.format('header = "%s"\n', h))
+        fh:write(string.format('header = "%s"\n', escapeCurlConfigValue(h)))
     end
     fh:write(string.format("max-time = %d\n", timeoutSecs))
     fh:close()
@@ -633,7 +683,14 @@ function M.queryClaude(img, prompt, claudeModel, apiKey, timeoutSecs)
                     text = prompt,
                 },
             },
-        }}
+        }},
+        output_config = {
+            format = {
+                type   = "json_schema",
+                name   = "keywords",
+                schema = M.KEYWORD_SCHEMA,
+            },
+        },
     })
     if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
 
@@ -682,8 +739,8 @@ end
 function M.queryOpenAI(img, prompt, openaiModel, apiKey, timeoutSecs)
     local ts = tostring(math.floor(LrDate.currentTime() * 1000))
     local encodeOk, body = pcall(json.encode, {
-        model      = openaiModel,
-        max_tokens = 1024,
+        model                = openaiModel,
+        max_completion_tokens = 1024,
         messages   = {{
             role    = "user",
             content = {
@@ -698,7 +755,15 @@ function M.queryOpenAI(img, prompt, openaiModel, apiKey, timeoutSecs)
                     text = prompt,
                 },
             },
-        }}
+        }},
+        response_format = {
+            type        = "json_schema",
+            json_schema = {
+                name   = "keywords",
+                strict = true,
+                schema = M.KEYWORD_SCHEMA,
+            },
+        },
     })
     if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
 
@@ -757,7 +822,11 @@ function M.queryGemini(img, prompt, geminiModel, apiKey, timeoutSecs)
                     text = prompt,
                 },
             },
-        }}
+        }},
+        generationConfig = {
+            responseMimeType = "application/json",
+            responseSchema   = M.KEYWORD_SCHEMA,
+        },
     })
     if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
 

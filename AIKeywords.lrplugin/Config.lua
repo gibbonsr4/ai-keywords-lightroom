@@ -43,8 +43,8 @@ end
 local json = dofile(_PLUGIN.path .. '/dkjson.lua')
 
 local function getOllamaVersion(ollamaUrl)
-    local tmpCfg = "/tmp/ai_kw_ver_cfg.txt"
-    local tmpOut = "/tmp/ai_kw_ver.json"
+    local tmpCfg = Engine.TEMP_DIR .. "/ai_kw_ver_cfg.txt"
+    local tmpOut = Engine.TEMP_DIR .. "/ai_kw_ver.json"
 
     local cfh = io.open(tmpCfg, "w")
     if not cfh then return nil end
@@ -138,9 +138,8 @@ LrTasks.startAsyncTask(function()
         local installed, ollamaRunning = getInstalledModels(current.ollamaUrl)
         local ollamaVersion = ollamaRunning and getOllamaVersion(current.ollamaUrl) or nil
 
-        -- Fetch up-to-date model list (falls back to hardcoded)
-        local remoteModels = fetchRemoteModels()
-        local activeModels = remoteModels or VISION_MODELS
+        -- Use bundled model list (no network call on open)
+        local activeModels = VISION_MODELS
 
         -- If the user's current model isn't in the active list, keep it
         local found = false
@@ -191,6 +190,8 @@ LrTasks.startAsyncTask(function()
         props.enableLogging    = current.enableLogging
         props.logFolder        = current.logFolder
         props.folderAliases    = current.folderAliases
+        props.basePrompt       = current.basePrompt
+        props.basePromptDisplay = (current.basePrompt ~= "" and current.basePrompt) or Engine.BASE_PROMPT
 
         -- Internal state
         props._installed       = installed
@@ -219,6 +220,18 @@ LrTasks.startAsyncTask(function()
             props.modelInfo = modelInfoMap[newValue] or ""
             props.installBtnTitle = getInstallBtnTitle(props._installed, newValue)
         end)
+
+        -- Helper to fetch remote model list and merge into activeModels
+        local function refreshModelList()
+            local remote = fetchRemoteModels()
+            if remote and #remote > 0 then
+                activeModels = remote
+                -- Rebuild info map
+                for _, m in ipairs(activeModels) do
+                    modelInfoMap[m.value] = m.info or ""
+                end
+            end
+        end
 
         -- Helper to refresh Ollama state
         local function refreshOllamaState()
@@ -275,7 +288,13 @@ LrTasks.startAsyncTask(function()
                                         LrTasks.execute('open "https://ollama.com/download"')
                                     elseif not props._ollamaRunning then
                                         LrTasks.execute('open -a Ollama')
-                                        LrTasks.sleep(3.0)
+                                        props.ollamaStatus = "Starting Ollama…"
+                                        -- Poll until Ollama responds (up to 15s)
+                                        for _ = 1, 30 do
+                                            LrTasks.sleep(0.5)
+                                            local ver = getOllamaVersion(props.ollamaUrl)
+                                            if ver then break end
+                                        end
                                     end
                                     refreshOllamaState()
                                 end)
@@ -346,6 +365,15 @@ LrTasks.startAsyncTask(function()
                         f:static_text {
                             title = "",
                             width = LrView.share("label_width"),
+                        },
+                        f:push_button {
+                            title  = "Check for New Models",
+                            action = function()
+                                LrTasks.startAsyncTask(function()
+                                    refreshModelList()
+                                    refreshOllamaState()
+                                end)
+                            end,
                         },
                         f:push_button {
                             title  = "Compare models on GitHub →",
@@ -681,6 +709,52 @@ LrTasks.startAsyncTask(function()
             },
 
             -- ═══════════════════════════════════════════════════════════
+            -- ADVANCED (editable base prompt)
+            -- ═══════════════════════════════════════════════════════════
+            f:group_box {
+                title           = "Advanced",
+                fill_horizontal = 1,
+                f:row {
+                    f:static_text {
+                        title = "",
+                        width = LrView.share("label_width"),
+                    },
+                    f:static_text {
+                        title      = "Editing the base prompt changes the core instructions sent to every AI model.\nChanges may affect keyword style, quality, and consistency.",
+                        text_color = LrView.kWarningColor,
+                    },
+                },
+                f:row {
+                    f:static_text {
+                        title     = "Base prompt:",
+                        width     = LrView.share("label_width"),
+                        alignment = "right",
+                    },
+                    f:edit_field {
+                        value           = LrView.bind("basePromptDisplay"),
+                        width_in_chars  = 55,
+                        height_in_lines = 12,
+                    },
+                },
+                f:row {
+                    f:static_text {
+                        title = "",
+                        width = LrView.share("label_width"),
+                    },
+                    f:push_button {
+                        title  = "Reset to Default",
+                        action = function()
+                            props.basePromptDisplay = Engine.BASE_PROMPT
+                        end,
+                    },
+                    f:static_text {
+                        title      = "Restores the built-in keywording prompt",
+                        text_color = LrView.kDisabledColor,
+                    },
+                },
+            },
+
+            -- ═══════════════════════════════════════════════════════════
             -- VALIDATION MESSAGE (shown when Save is disabled)
             -- ═══════════════════════════════════════════════════════════
             f:row {
@@ -716,8 +790,13 @@ LrTasks.startAsyncTask(function()
                 return false, "Gemini selected — enter your Google AI API key."
             end
             local url = values.ollamaUrl or ""
-            if values.provider == "ollama" and not url:match("^https?://") then
-                return false, "Ollama URL must start with http:// or https://"
+            if values.provider == "ollama" then
+                if not url:match("^https?://") then
+                    return false, "Ollama URL must start with http:// or https://"
+                end
+                if url:match('["\\\n\r%c]') then
+                    return false, "Ollama URL contains invalid characters."
+                end
             end
             return true, ""
         end
@@ -751,12 +830,17 @@ LrTasks.startAsyncTask(function()
             prefs.provider         = props.provider
             prefs.ollamaUrl        = props.ollamaUrl
             prefs.model            = props.model
-            prefs.claudeApiKey     = props.claudeApiKey
             prefs.claudeModel      = props.claudeModel
-            prefs.openaiApiKey     = props.openaiApiKey
             prefs.openaiModel      = props.openaiModel
-            prefs.geminiApiKey     = props.geminiApiKey
             prefs.geminiModel      = props.geminiModel
+
+            -- Store API keys in macOS Keychain, clear from plaintext prefs
+            Prefs.storeApiKey("claude_api_key", props.claudeApiKey)
+            Prefs.storeApiKey("openai_api_key", props.openaiApiKey)
+            Prefs.storeApiKey("gemini_api_key", props.geminiApiKey)
+            prefs.claudeApiKey     = nil
+            prefs.openaiApiKey     = nil
+            prefs.geminiApiKey     = nil
             prefs.maxKeywords      = math.floor(maxKw)
             prefs.timeoutSecs      = math.floor(timeout)
             prefs.useGPS           = props.useGPS
@@ -768,6 +852,14 @@ LrTasks.startAsyncTask(function()
             prefs.enableLogging    = props.enableLogging
             prefs.logFolder        = props.logFolder
             prefs.folderAliases    = props.folderAliases
+
+            -- Save basePrompt: empty = use default, so future plugin updates take effect
+            local trimmedBase = Engine.trim(props.basePromptDisplay or "")
+            if trimmedBase == "" or trimmedBase == Engine.BASE_PROMPT then
+                prefs.basePrompt = ""
+            else
+                prefs.basePrompt = props.basePromptDisplay
+            end
         end
 
     end)

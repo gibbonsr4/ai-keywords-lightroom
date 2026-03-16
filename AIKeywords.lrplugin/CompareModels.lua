@@ -34,9 +34,8 @@ local function showSelectionDialog(photo, settings)
     -- Check Ollama status
     local installed, ollamaRunning = Engine.getInstalledModels(settings.ollamaUrl)
 
-    -- Get up-to-date model list
-    local remoteModels = Engine.fetchRemoteModels()
-    local activeModels = remoteModels or Engine.VISION_MODELS
+    -- Use bundled model list (no network call)
+    local activeModels = Engine.VISION_MODELS
 
     -- If user's current model isn't in the list, add it
     local found = false
@@ -374,6 +373,7 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
     local promptSettings = {
         prompt      = promptOverride or settings.prompt,
         maxKeywords = settings.maxKeywords,
+        basePrompt  = settings.basePrompt,
     }
     local prompt = Engine.buildPrompt(promptSettings, folderHint, gpsInfo)
 

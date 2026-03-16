@@ -2,3 +2,5 @@
 *.log
 *.tmp
 .claude/
+__MACOSX/
+*.zip

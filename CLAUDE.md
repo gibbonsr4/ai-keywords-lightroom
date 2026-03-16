@@ -72,7 +72,8 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - GPS coordinates work but models sometimes leak them into keywords (parser filters these)
 - Folder aliases are effective — "DR" → "Dominican Republic" successfully influences keywords
 - The prompt is assembled by buildPrompt() in this order: [GPS/folder context] + [BASE_PROMPT] + [user custom instructions] + [output format]
-- BASE_PROMPT is hardcoded in AIEngine.lua — contains keywording best practices, not user-editable
+- BASE_PROMPT default lives in AIEngine.lua — user can override in Settings > Advanced
+- settings.basePrompt: empty string means "use M.BASE_PROMPT default" (so plugin updates auto-apply)
 - settings.prompt contains optional user custom instructions (e.g. "Focus on architecture") — can be empty
 
 ### Keyword Style (based on stock photography best practices)

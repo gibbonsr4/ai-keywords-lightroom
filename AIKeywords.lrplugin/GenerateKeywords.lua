@@ -254,7 +254,8 @@ LrTasks.startAsyncTask(function()
 
         -- Clean up orphaned temp files from interrupted runs
         pcall(function()
-            LrTasks.execute("rm -f /tmp/ai_kw_req_* /tmp/ai_kw_resp_* /tmp/ai_kw_cfg_* 2>/dev/null")
+            local td = Engine.TEMP_DIR
+            LrTasks.execute(string.format("rm -f %s/ai_kw_req_* %s/ai_kw_resp_* %s/ai_kw_cfg_* 2>/dev/null", td, td, td))
         end)
 
         -- Initialize logger
@@ -286,6 +287,10 @@ LrTasks.startAsyncTask(function()
         local successCount   = 0
         local skippedKwCount = 0
         local errorLog       = {}
+
+        -- Log the base prompt once (without per-image location context)
+        local samplePrompt = Engine.buildPrompt(SETTINGS, nil, nil)
+        log:log("Prompt: " .. samplePrompt)
 
         for i, photo in ipairs(toProcess) do
             if progress:isCanceled() then

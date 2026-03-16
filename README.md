@@ -166,9 +166,9 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 Enable logging in Settings to get a timestamped log file for each run. Logs are written incrementally (crash-safe) and include:
 
 - Provider, model, and settings used
+- Base prompt (once per run)
 - Per-image results (keywords, errors, skips)
-- Full prompt sent to the model
-- Raw model response
+- Raw model response (first 500 chars)
 - Per-image timing
 
 Log files are saved to the configured folder (default: `~/Documents`).

@@ -4,10 +4,14 @@
   Pure preferences module — no UI, no side effects.
   Safe to dofile() from any module.
 
+  API keys are stored in the macOS Keychain via LrPasswords,
+  with a fallback to LrPrefs for migration from older versions.
+
   The Settings dialog lives in Config.lua and is invoked via the LR menu.
 --]]
 
-local LrPrefs = import 'LrPrefs'
+local LrPrefs     = import 'LrPrefs'
+local LrPasswords = import 'LrPasswords'
 
 local DEFAULTS = {
     provider         = "ollama",
@@ -30,6 +34,7 @@ local DEFAULTS = {
     logFolder        = "",
     folderAliases    = "",
     prompt           = "",
+    basePrompt       = "",
 }
 
 -- Helper: Lua's `cond and valTrue or valFalse` breaks when valTrue is false.
@@ -48,17 +53,30 @@ local function stringPref(prefs, key, allowEmpty)
     return DEFAULTS[key]
 end
 
+-- Retrieve an API key: try Keychain first, fall back to prefs (migration).
+local function apiKeyPref(prefs, keychainKey, prefsKey)
+    local ok, key = pcall(LrPasswords.retrieve, keychainKey)
+    if ok and key and key ~= "" then return key end
+    -- Fallback to plaintext prefs (pre-migration)
+    return stringPref(prefs, prefsKey, true)
+end
+
+-- Store an API key in the Keychain.
+local function storeApiKey(keychainKey, value)
+    pcall(LrPasswords.store, keychainKey, value or "")
+end
+
 local function getPrefs()
     local prefs = LrPrefs.prefsForPlugin()
     return {
         provider         = stringPref(prefs, "provider"),
         ollamaUrl        = stringPref(prefs, "ollamaUrl"),
         model            = stringPref(prefs, "model"),
-        claudeApiKey     = stringPref(prefs, "claudeApiKey", true),
+        claudeApiKey     = apiKeyPref(prefs, "claude_api_key", "claudeApiKey"),
         claudeModel      = stringPref(prefs, "claudeModel"),
-        openaiApiKey     = stringPref(prefs, "openaiApiKey", true),
+        openaiApiKey     = apiKeyPref(prefs, "openai_api_key", "openaiApiKey"),
         openaiModel      = stringPref(prefs, "openaiModel"),
-        geminiApiKey     = stringPref(prefs, "geminiApiKey", true),
+        geminiApiKey     = apiKeyPref(prefs, "gemini_api_key", "geminiApiKey"),
         geminiModel      = stringPref(prefs, "geminiModel"),
         maxKeywords      = (prefs.maxKeywords  ~= nil) and prefs.maxKeywords  or DEFAULTS.maxKeywords,
         timeoutSecs      = (prefs.timeoutSecs  ~= nil) and prefs.timeoutSecs  or DEFAULTS.timeoutSecs,
@@ -71,10 +89,12 @@ local function getPrefs()
         logFolder        = stringPref(prefs, "logFolder", true),
         folderAliases    = stringPref(prefs, "folderAliases", true),
         prompt           = stringPref(prefs, "prompt", true),
+        basePrompt       = stringPref(prefs, "basePrompt", true),
     }
 end
 
 return {
-    getPrefs = getPrefs,
-    DEFAULTS = DEFAULTS,
+    getPrefs     = getPrefs,
+    storeApiKey  = storeApiKey,
+    DEFAULTS     = DEFAULTS,
 }
