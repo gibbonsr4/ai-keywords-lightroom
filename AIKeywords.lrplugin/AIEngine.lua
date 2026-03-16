@@ -18,7 +18,19 @@ local json = dofile(_PLUGIN.path .. '/dkjson.lua')
 local M = {}
 
 -- ── Constants ─────────────────────────────────────────────────────────────
-M.TEMP_DIR = os.getenv("TMPDIR") or "/tmp"
+-- LR SDK sandboxes os.getenv; try io.popen to read macOS per-user TMPDIR
+do
+    local dir = "/tmp"
+    local ok, handle = pcall(io.popen, 'printf "%s" "$TMPDIR"')
+    if ok and handle then
+        local result = handle:read("*a")
+        handle:close()
+        if result and result ~= "" then
+            dir = result:gsub("/$", "")
+        end
+    end
+    M.TEMP_DIR = dir
+end
 
 -- Cloud API base64 image limit ~5MB. Base64 is ~4/3 of raw, so raw limit ~3.75MB.
 M.CLOUD_MAX_RAW_BYTES = 3750000
