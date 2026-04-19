@@ -367,13 +367,17 @@ LrTasks.startAsyncTask(function()
                 end
             end
 
-            -- Extract GPS coordinates if enabled and available
+            -- Extract GPS coordinates if enabled and available.
+            -- The full coordinates are sent to the model for landmark ID, but
+            -- the log only records presence — logs persist on disk and are
+            -- occasionally shared (bug reports, screenshots), so we redact
+            -- the actual values.
             local gpsInfo = nil
             if SETTINGS.useGPS then
                 local gps = photo:getRawMetadata('gps')
                 if gps and gps.latitude and gps.longitude then
                     gpsInfo = { latitude = gps.latitude, longitude = gps.longitude }
-                    log:logDetail("GPS", string.format("%.4f, %.4f", gpsInfo.latitude, gpsInfo.longitude))
+                    log:logDetail("GPS", "sent (coordinates redacted from logs)")
                 end
             end
 

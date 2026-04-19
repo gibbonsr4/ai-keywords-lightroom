@@ -664,6 +664,16 @@ LrTasks.startAsyncTask(function()
                 },
                 f:row {
                     f:static_text {
+                        title = "",
+                        width = LrView.share("label_width"),
+                    },
+                    f:static_text {
+                        title      = "Logs contain raw model output but GPS coordinates are redacted.",
+                        text_color = LrView.kDisabledColor,
+                    },
+                },
+                f:row {
+                    f:static_text {
                         title     = "Log folder:",
                         width     = LrView.share("label_width"),
                         alignment = "right",
