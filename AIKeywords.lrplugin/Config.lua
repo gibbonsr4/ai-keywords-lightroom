@@ -218,7 +218,7 @@ LrTasks.startAsyncTask(function()
             if isModelInstalled(inst, modelValue) then
                 return "Uninstall Model"
             else
-                return "Install in Terminal"
+                return "Install Model"
             end
         end
 
