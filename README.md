@@ -78,20 +78,22 @@ The plugin checks Ollama's status when you open Settings and shows whether it's 
 
 <a id="ollama-models"></a>
 
-Recommended models for 24GB Apple Silicon:
+Recommended models, smallest to largest:
 
 | Model | RAM | Best For |
 |---|---|---|
-| Gemma 3 4B | ~3GB | Popular, versatile vision model |
-| Qwen2.5-VL 3B | ~2GB | Fastest option, good quality for size |
-| MiniCPM-V 8B | ~5GB | Fast, strong at detail recognition |
-| Qwen2.5-VL 7B | ~5GB | Best local quality, accurate species IDs |
-| Qwen3-VL 8B | ~5GB | Next-gen Qwen vision |
-| Gemma 3 12B | ~8GB | High quality, strong all-rounder |
-| Llama 3.2 Vision 11B | ~8GB | Solid all-rounder |
-| Moondream 2 | ~1GB | Tiny, fast, basic keywords only |
+| Moondream 2 | ~1GB | Tiny fallback, basic keywords only |
+| Qwen3-VL 4B | ~3GB | Fastest decent tier, next-gen Qwen |
+| Qwen2.5-VL 7B | ~5GB | Battle-tested, accurate IDs |
+| Gemma 4 E4B | ~6GB | Mid-tier default, multimodal out of the box |
+| MiniCPM-V 4.5 8B | ~6GB | Strong detail/OCR, built on Qwen3+SigLIP2 |
+| Qwen3-VL 8B | ~6GB | Main quality tier, next-gen Qwen |
+| Gemma 4 31B | ~14GB | High-quality dense, strong all-rounder |
+| Qwen3-VL 30B MoE | ~20GB | Top-tier local, 32GB+ Apple Silicon |
 
-> **Note:** Qwen2.5-VL and Qwen3-VL models require Ollama 0.7.0 or newer.
+> **Note:** Qwen2.5-VL and Qwen3-VL models require Ollama 0.7.0 or newer. Gemma 4 and MiniCPM-V 4.5 need a recent Ollama build.
+>
+> Ollama's MLX backend (preview) gives Apple Silicon a significant speedup — enable it in Ollama's settings if available.
 >
 > Click the **Check for New Models** button in Settings to pull the latest recommended list from GitHub — no plugin update needed. You can also uninstall models directly from Settings to free disk space.
 
@@ -100,21 +102,21 @@ Recommended models for 24GB Apple Silicon:
 | Setting | Notes |
 |---|---|
 | API Key | Your Anthropic API key |
-| Model | Haiku 4.5 (~$0.002/image) or Sonnet 4.6 (~$0.007/image) |
+| Model | Haiku 4.5 (~$0.002/image), Sonnet 4.6 (~$0.007/image), or Opus 4.7 (~$0.025/image) |
 
 ### OpenAI Settings
 
 | Setting | Notes |
 |---|---|
 | API Key | Your OpenAI API key |
-| Model | GPT-5 Mini (~$0.001/image) or GPT-5.4 (~$0.007/image) |
+| Model | GPT-5.4 Nano (~$0.0003/image), GPT-5.4 Mini (~$0.001/image), or GPT-5.4 (~$0.007/image) |
 
 ### Gemini Settings
 
 | Setting | Notes |
 |---|---|
 | API Key | Your Google AI API key |
-| Model | Gemini 2.5 Flash-Lite (~$0.0003/image), 2.5 Flash (~$0.001/image), or 2.5 Pro (~$0.005/image) |
+| Model | Gemini 3.1 Flash-Lite (~$0.0002/image), Gemini 3 Flash (~$0.0008/image), or Gemini 3 Pro (~$0.003/image) |
 
 ### Keyword Settings
 
@@ -152,12 +154,12 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 
 | | Ollama | Claude | OpenAI | Gemini |
 |---|---|---|---|---|
-| Cost | Free | $0.002–0.007/image | $0.001–0.007/image | $0.0003–0.005/image |
+| Cost | Free | $0.002–0.025/image | $0.0003–0.007/image | $0.0002–0.003/image |
 | Speed | 4–20s (Apple Silicon) | ~2s | ~2s | ~2s |
 | Quality | Good general keywords | Excellent, best landmark ID | Very good | Very good |
 | Privacy | Local, nothing leaves your machine | Cloud | Cloud | Cloud |
 
-**Recommendation:** Ollama for casual tagging and privacy. Claude Sonnet for accuracy-critical runs. Gemini 2.5 Flash-Lite for cheapest cloud option. Use Compare Models to test which works best for your photos.
+**Recommendation:** Ollama for casual tagging and privacy. Claude Sonnet 4.6 or Opus 4.7 for accuracy-critical runs. Gemini 3.1 Flash-Lite for cheapest cloud option. Use Compare Models to test which works best for your photos.
 
 ---
 

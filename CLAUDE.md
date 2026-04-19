@@ -43,19 +43,19 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - Endpoint: `https://api.anthropic.com/v1/messages`
 - Headers: x-api-key, anthropic-version: 2023-06-01
 - Body: `{ model, max_tokens: 1024, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }, { type: "text", text: prompt }] }] }`
-- Models: claude-haiku-4-5-20251001 (~$0.002/image), claude-sonnet-4-6 (~$0.007/image)
+- Models: claude-haiku-4-5-20251001 (~$0.002/image), claude-sonnet-4-6 (~$0.007/image), claude-opus-4-7 (~$0.025/image)
 
 ### OpenAI API
 - Endpoint: `https://api.openai.com/v1/chat/completions`
 - Headers: Authorization: Bearer {key}, Content-Type: application/json
 - Body: `{ model, max_tokens: 1024, messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "data:image/jpeg;base64,{data}" } }, { type: "text", text: prompt }] }] }`
-- Models: gpt-5-mini-2025-08-07 (~$0.001/image), gpt-5.4 (~$0.007/image)
+- Models: gpt-5.4-nano (~$0.0003/image), gpt-5.4-mini (~$0.001/image), gpt-5.4 (~$0.007/image)
 
 ### Gemini API
 - Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}`
 - Headers: Content-Type: application/json (API key in URL query param)
 - Body: `{ contents: [{ parts: [{ inlineData: { mimeType: "image/jpeg", data: base64 } }, { text: prompt }] }] }`
-- Models: gemini-2.5-flash-lite (~$0.0003/image), gemini-2.5-flash (~$0.001/image), gemini-2.5-pro (~$0.005/image)
+- Models: gemini-3-1-flash-lite (~$0.0002/image), gemini-3-flash (~$0.0008/image), gemini-3-pro (~$0.003/image)
 
 ## Image Rendering
 - Cloud providers (Claude, OpenAI, Gemini): 1568px long edge
@@ -91,14 +91,27 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 
 ### Model Comparison (Travel Photography)
 
+Historical benchmarks, pre-April 2026 model refresh. Provided for context —
+re-benchmark the current registry when convenient.
+
 | Model | Cost | Landmark ID | Species ID | Crop ID | Location | Speed |
 |---|---|---|---|---|---|---|
 | Claude Sonnet 4.6 | $0.007/img | Excellent | Excellent | Excellent | Excellent | ~2s |
 | Claude Haiku 4.5 | $0.002/img | Hallucinates | Good | Poor (corn≠sugarcane) | Good | ~2s |
 | Qwen2.5-VL 7B | Free | Good generic | Good | Good (got sugarcane) | Good w/context | ~5-10s |
-| MiniCPM-V 8B | Free | Good generic | Decent | Untested | Good w/context | ~4-7s |
+| MiniCPM-V 8B (v2.6) | Free | Good generic | Decent | Untested | Good w/context | ~4-7s |
 
-Sonnet for accuracy-critical runs, Qwen 7B for free batch processing, Haiku only when speed/cost is priority over accuracy.
+**New models (April 2026 refresh) — unbenchmarked:**
+- **Cloud additions:** Claude Opus 4.7 (~$0.025/img), GPT-5.4 / Mini / Nano (~$0.0003–0.007/img), Gemini 3 Pro / Flash / 3.1 Flash-Lite (~$0.0002–0.003/img).
+- **Ollama refresh:** Qwen3-VL (4B/8B/30B MoE), Gemma 4 (E4B, 31B), MiniCPM-V 4.5 8B (built on Qwen3 + SigLIP2). Retired: Gemma 3 (superseded by Gemma 4), Qwen2.5-VL 3B, MiniCPM-V (v2.6), Llama 3.2 Vision 11B.
+- **Default Ollama model** stays at `qwen2.5vl:7b` because it's the battle-tested option with documented real-world results (sugarcane/DR). Once Qwen3-VL 8B and Gemma 4 benchmarks land, revisit.
+
+Broad heuristics until re-benchmarked:
+- Sonnet 4.6 or Opus 4.7 for accuracy-critical runs.
+- Haiku 4.5 only when speed/cost matters more than accuracy (compact prompt helps).
+- GPT-5.4 Nano / Gemini 3.1 Flash-Lite are the new cheap-tier picks for high-volume batches.
+- Qwen3-VL 30B MoE is the new "best local quality" target for 32GB+ Apple Silicon (MoE — only 3B params active).
+- Qwen 7B (2.5) for free batch processing until Qwen3-VL 8B is benchmarked on the same test set.
 
 ## Known Issues
 
