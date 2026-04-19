@@ -400,10 +400,14 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
         end
     end
 
+    -- Title stays neutral because LR SDK won't let us update it mid-run;
+    -- phase info goes into setCaption so "rendering image" doesn't linger
+    -- while we're actually querying model 3 of 4.
     local progress = LrProgressScope({
-        title           = "Compare Models — rendering image…",
+        title           = string.format("Compare Models (%d models)", #selectedModels),
         functionContext = context,
     })
+    progress:setCaption("Preparing image…")
 
     local ollamaImg, cloudImg
     local ollamaImgErr, cloudImgErr
@@ -425,7 +429,7 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
         if progress:isCanceled() then break end
 
         progress:setPortionComplete(i - 1, #selectedModels)
-        progress:setCaption(string.format("[%d/%d] %s…", i, #selectedModels, m.label))
+        progress:setCaption(string.format("Querying [%d/%d] %s…", i, #selectedModels, m.label))
 
         local img = (m.provider == "ollama") and ollamaImg or cloudImg
         local imgErr = (m.provider == "ollama") and ollamaImgErr or cloudImgErr
@@ -505,6 +509,25 @@ local function showResults(photo, results, promptOverride)
         end
     end
 
+    -- Look up a per-image cost estimate for this model from the provider
+    -- registry. Ollama is free. Returns nil if not found (falls back to no
+    -- cost line in the header). Static estimate — a future enhancement is
+    -- to parse actual token usage from API responses; tracked in GH issue.
+    local function estimatedCost(provider, modelValue)
+        local registries = {
+            claude = Engine.CLAUDE_MODELS,
+            openai = Engine.OPENAI_MODELS,
+            gemini = Engine.GEMINI_MODELS,
+        }
+        if provider == "ollama" then return "free" end
+        local reg = registries[provider]
+        if not reg then return nil end
+        for _, m in ipairs(reg) do
+            if m.value == modelValue then return m.cost end
+        end
+        return nil
+    end
+
     -- Build a column for each model's results
     local columns = {}
     for _, r in ipairs(results) do
@@ -529,6 +552,8 @@ local function showResults(photo, results, promptOverride)
 
         local headerColor = r.error and LrView.kWarningColor or nil
         local kwCount = r.error and "" or string.format("  (%d keywords)", #r.keywords)
+        local cost = estimatedCost(r.provider, r.model)
+        local costLine = cost and ("est. " .. cost .. "/image") or ""
 
         table.insert(columns, f:column {
             spacing = f:control_spacing(),
@@ -541,6 +566,10 @@ local function showResults(photo, results, promptOverride)
             },
             f:static_text {
                 title      = string.format("%.1fs%s", r.elapsed, kwCount),
+                text_color = LrView.kDisabledColor,
+            },
+            f:static_text {
+                title      = costLine,
                 text_color = LrView.kDisabledColor,
             },
             f:separator { fill_horizontal = 1 },
