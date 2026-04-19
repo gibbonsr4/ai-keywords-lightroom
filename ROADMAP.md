@@ -10,4 +10,9 @@ Detailed task breakdowns and progress are tracked in [GitHub Issues](https://git
 | Future | Semantic search | [#5](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/5) | Natural language photo search |
 | Future | Cost tracking | [#6](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/6) | Parse token usage from API responses and display per-run costs |
 | Future | Windows support | [#7](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/7) | Replace macOS-specific commands |
-| Backlog | Encrypted API keys | [#1](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/1) | Use LrPasswords for secure API key storage |
+
+## Shipped
+
+| Feature | Issue | Shipped in | Summary |
+|---|---|---|---|
+| Encrypted API keys | [#1](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/1) | 1.1.0 | API keys stored in the macOS Keychain via LrPasswords, with auto-migration from the pre-1.1 plaintext pref on first read |

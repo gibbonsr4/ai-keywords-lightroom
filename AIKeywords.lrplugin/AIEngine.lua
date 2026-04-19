@@ -105,9 +105,12 @@ M.VISION_MODELS = {
 
 -- ── Cloud provider models ───────────────────────────────────────────────
 -- Shared by Config.lua (dropdowns) and CompareModels.lua (checkboxes).
+-- `promptProfile` selects which default prompt the model gets when the user
+-- hasn't customized Advanced → Base prompt. Haiku hallucinates on long
+-- prompts (CLAUDE.md), so it uses the compact variant.
 M.CLAUDE_MODELS = {
-    { value = "claude-haiku-4-5-20251001", label = "Claude Haiku 4.5",  cost = "~$0.002" },
-    { value = "claude-sonnet-4-6",         label = "Claude Sonnet 4.6", cost = "~$0.007" },
+    { value = "claude-haiku-4-5-20251001", label = "Claude Haiku 4.5",  cost = "~$0.002", promptProfile = "compact"  },
+    { value = "claude-sonnet-4-6",         label = "Claude Sonnet 4.6", cost = "~$0.007", promptProfile = "standard" },
 }
 
 M.OPENAI_MODELS = {
@@ -500,6 +503,61 @@ M.BASE_PROMPT =
     "Avoid generic filler: nature, outdoor, natural, beautiful, environment, scenic, wildlife, " ..
     "colorful, vibrant, small, large, tiny, photo, image, picture, stock, background."
 
+-- Compact variant for models that hallucinate under long prompts (Haiku).
+-- Drops grammar/atomicity/synonym rules; keeps coverage list, hallucination
+-- guardrail, and filler exclusion. Selected via model registry promptProfile.
+M.BASE_PROMPT_COMPACT =
+    "Analyze this photo and return keywords ordered by relevance. " ..
+    "Include subjects, setting, dominant colors, mood, and composition terms " ..
+    "(copy space, close-up, aerial view, silhouette). " ..
+    "For people: include age range, gender, and activity. " ..
+    "Only name specific landmarks, species, or varieties if you are highly confident — " ..
+    "wrong specifics are worse than correct generics. " ..
+    "Use lowercase singular nouns. " ..
+    "Avoid generic filler: nature, outdoor, natural, beautiful, environment, scenic, wildlife, " ..
+    "colorful, vibrant, photo, image, picture, stock, background."
+
+-- Registry: named prompt variants, looked up by the model's promptProfile.
+M.PROMPT_PROFILES = {
+    standard = M.BASE_PROMPT,
+    compact  = M.BASE_PROMPT_COMPACT,
+}
+
+-- Resolve the prompt profile for the currently-selected model.
+-- Accepts a settings table with `provider` and the per-provider model field.
+-- Returns "standard" if the model isn't in a registry (custom Ollama models,
+-- or the provider field is missing).
+function M.getPromptProfile(settings)
+    if not settings then return "standard" end
+    local provider = settings.provider or "ollama"
+    local modelValue, registry
+    if provider == "claude" then
+        modelValue, registry = settings.claudeModel, M.CLAUDE_MODELS
+    elseif provider == "openai" then
+        modelValue, registry = settings.openaiModel, M.OPENAI_MODELS
+    elseif provider == "gemini" then
+        modelValue, registry = settings.geminiModel, M.GEMINI_MODELS
+    else
+        modelValue, registry = settings.model, M.VISION_MODELS
+    end
+    for _, m in ipairs(registry or {}) do
+        if m.value == modelValue then
+            return m.promptProfile or "standard"
+        end
+    end
+    return "standard"
+end
+
+-- Returns the effective base prompt for this run: user override if set,
+-- otherwise the default prompt for the selected model's profile.
+function M.getBasePromptForSettings(settings)
+    if settings and settings.basePrompt and settings.basePrompt ~= "" then
+        return settings.basePrompt
+    end
+    local profile = M.getPromptProfile(settings)
+    return M.PROMPT_PROFILES[profile] or M.BASE_PROMPT
+end
+
 -- ── Build prompt with folder context and GPS ─────────────────────────────
 -- Sanitize a value going into the CONTEXT data block so that folder names
 -- or alias expansions cannot close the fence or inject new instructions.
@@ -517,10 +575,7 @@ function M.sanitizeContextValue(s, maxLen)
 end
 
 function M.buildPrompt(settings, folderHint, gpsInfo)
-    local basePrompt = settings.basePrompt
-    if not basePrompt or basePrompt == "" then
-        basePrompt = M.BASE_PROMPT
-    end
+    local basePrompt = M.getBasePromptForSettings(settings)
 
     local parts = { basePrompt }
 

@@ -93,7 +93,7 @@ Recommended models for 24GB Apple Silicon:
 
 > **Note:** Qwen2.5-VL and Qwen3-VL models require Ollama 0.7.0 or newer.
 >
-> The model list updates automatically when you open Settings — no plugin update needed. You can also uninstall models directly from Settings to free disk space.
+> Click the **Check for New Models** button in Settings to pull the latest recommended list from GitHub — no plugin update needed. You can also uninstall models directly from Settings to free disk space.
 
 ### Claude API Settings
 
