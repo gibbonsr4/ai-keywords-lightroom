@@ -140,8 +140,11 @@ LrTasks.startAsyncTask(function()
         local installed, ollamaRunning = getInstalledModels(current.ollamaUrl)
         local ollamaVersion = ollamaRunning and getOllamaVersion(current.ollamaUrl) or nil
 
-        -- Use bundled model list (no network call on open)
-        local activeModels = VISION_MODELS
+        -- Use bundled model list (no network call on open). Copy the shared
+        -- Engine.VISION_MODELS table so the append below doesn't mutate
+        -- module-level state across repeated Settings-dialog opens.
+        local activeModels = {}
+        for _, m in ipairs(VISION_MODELS) do table.insert(activeModels, m) end
 
         -- If the user's current model isn't in the active list, keep it
         local found = false

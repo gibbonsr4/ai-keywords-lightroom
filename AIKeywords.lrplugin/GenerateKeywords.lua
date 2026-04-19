@@ -133,11 +133,15 @@ function Logger:finish(successCount, errorCount, skippedCount)
 end
 
 -- ── Query router (wraps Engine functions with settings) ──────────────────
-local function queryModel(photo, folderHint, gpsInfo, settings, imageIndex)
+-- Returns (keywords, rawResponse, err). On canceled runs returns (nil, nil, "canceled").
+-- `progress` is optional; cancellation can only be polled between phases —
+-- the blocking curl inside the provider calls cannot be interrupted.
+local function queryModel(photo, folderHint, gpsInfo, settings, imageIndex, progress)
     local ts = tostring(math.floor(LrDate.currentTime() * 1000)) .. "_" .. tostring(imageIndex or 0)
 
     local img, err = Engine.prepareImage(photo, ts, settings.provider)
-    if not img then return nil, err end
+    if not img then return nil, nil, err end
+    if progress and progress:isCanceled() then return nil, nil, "canceled" end
 
     local prompt = Engine.buildPrompt(settings, folderHint, gpsInfo)
 
@@ -156,6 +160,7 @@ local function queryModel(photo, folderHint, gpsInfo, settings, imageIndex)
             settings.ollamaUrl, settings.timeoutSecs)
     end
 
+    if progress and progress:isCanceled() then return nil, raw, "canceled" end
     if not raw then return nil, nil, err end
 
     local keywords = Engine.parseKeywords(raw, settings)
@@ -301,6 +306,10 @@ LrTasks.startAsyncTask(function()
         -- Parse folder aliases once (not per-image)
         local folderAliases = Engine.parseAliases(SETTINGS.folderAliases)
 
+        -- Precompute catalog root paths once — was O(photos × roots) when
+        -- getFolderContext walked catalog:getFolders() on every photo.
+        local rootPaths = Engine.getCatalogRootPaths(catalog)
+
         local modelName, providerLabel
         if SETTINGS.provider == "claude" then
             modelName = SETTINGS.claudeModel
@@ -360,7 +369,7 @@ LrTasks.startAsyncTask(function()
             -- Build folder hint
             local folderHint = nil
             if SETTINGS.useFolderContext then
-                local parts = Engine.getFolderContext(photo, catalog, folderAliases)
+                local parts = Engine.getFolderContext(photo, rootPaths, folderAliases)
                 if #parts > 0 then
                     folderHint = table.concat(parts, " > ")
                     log:logDetail("Folder", folderHint)
@@ -381,10 +390,17 @@ LrTasks.startAsyncTask(function()
                 end
             end
 
-            -- Query AI model (render + send + parse)
+            -- Query AI model (render + send + parse). Pass progress so we
+            -- can short-circuit between phases if the user clicks Cancel
+            -- (the curl itself is blocking and can't be aborted).
             local queryStart = LrDate.currentTime()
-            local keywords, rawResponse, err = queryModel(photo, folderHint, gpsInfo, SETTINGS, i)
+            local keywords, rawResponse, err = queryModel(photo, folderHint, gpsInfo, SETTINGS, i, progress)
             local queryElapsed = LrDate.currentTime() - queryStart
+
+            if err == "canceled" then
+                log:log("CANCELED by user at image " .. i)
+                break
+            end
 
             if rawResponse then
                 log:logDetail("Response", rawResponse:sub(1, 500))
