@@ -507,13 +507,16 @@ M.BASE_PROMPT =
     "(hotels, restaurants, forts, bridges, monuments, beaches, natural features). " ..
     "For people: include age range, gender, and activity.\n\n" ..
 
-    "For locations and landmarks: if GPS or folder context is provided, use it to identify " ..
-    "plausible landmarks and features — but only emit them when the image itself actually shows them. " ..
-    "When you confidently identify a named landmark, structure, species, or cultural artifact, " ..
-    "include both the specific name and a generic category so searches work at either level " ..
+    "For locations and landmarks: determine the location from visual cues in the image — " ..
+    "architecture, vegetation, light, cultural markers — combined with any CONTEXT block below " ..
+    "when provided. Then identify specific landmarks, structures, hotels, resorts, species, and " ..
+    "cultural artifacts consistent with that location. When you confidently identify a named " ..
+    "landmark, structure, species, or cultural artifact, include both the specific name and a " ..
+    "generic category so searches work at either level " ..
     "(e.g., 'Fort Jefferson', 'fort', 'historic fort'). " ..
     "If you recognize the type but are not confident of the specific name, emit the most specific " ..
     "generic you're sure of (e.g., 'Spanish colonial fort') rather than guessing. " ..
+    "Only emit landmarks the image actually shows. " ..
     "Wrong specifics are worse than correct generics.\n\n" ..
 
     "For animals and plants you can confidently identify, use the most specific common name — " ..
@@ -538,12 +541,14 @@ M.BASE_PROMPT_COMPACT =
     "and named structures when recognizable (hotels, forts, bridges, monuments, beaches, natural features). " ..
     "For people: include age range, gender, and activity.\n\n" ..
 
-    "If GPS or folder context is provided, use it to identify plausible landmarks — " ..
-    "but only emit them when the image actually shows them. " ..
+    "Determine the location from visual cues (architecture, vegetation, light, cultural markers) " ..
+    "and any CONTEXT block below when provided. Then identify specific landmarks, structures, " ..
+    "hotels, resorts, or species consistent with that location. " ..
     "When you confidently identify a named landmark or structure, include both the specific name " ..
     "and a generic category (e.g., 'Fort Jefferson', 'fort'). " ..
     "If you recognize the type but aren't confident of the name, emit a specific generic " ..
     "(e.g., 'Spanish colonial fort') rather than guessing. " ..
+    "Only emit landmarks the image actually shows. " ..
     "Wrong specifics are worse than correct generics.\n\n" ..
 
     "Use lowercase singular nouns. " ..
