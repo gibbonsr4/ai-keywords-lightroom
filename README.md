@@ -74,7 +74,7 @@ The plugin checks Ollama's status when you open Settings and shows whether it's 
 
 - **Start Ollama** directly from Settings (or open the download page if not installed)
 - **Choose a model** from the dropdown with install status indicators (✓ = installed)
-- **Install models** by clicking "Install in Terminal"
+- **Install models** by clicking "Install Model" (opens Terminal so you can watch `ollama pull` progress)
 
 <a id="ollama-models"></a>
 
