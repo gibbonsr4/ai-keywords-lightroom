@@ -184,13 +184,6 @@ LrTasks.startAsyncTask(function()
         props.openaiModel      = current.openaiModel
         props.geminiApiKey     = current.geminiApiKey
         props.geminiModel      = current.geminiModel
-
-        -- Per-provider "Show" toggles for API key masking. Session-only,
-        -- default off. Flipping to true swaps the masked password_field
-        -- for a plain edit_field so the user can read/paste the key.
-        props.showClaudeKey = false
-        props.showOpenaiKey = false
-        props.showGeminiKey = false
         props.maxKeywords      = tostring(current.maxKeywords)
         props.timeoutSecs      = tostring(current.timeoutSecs)
         props.useGPS           = current.useGPS
@@ -302,32 +295,19 @@ LrTasks.startAsyncTask(function()
             props.modelInfo = modelInfoMap[props.model] or ""
         end
 
-        -- Masked API key row with a "Show" checkbox that reveals the key
-        -- in a plain edit field. Both fields are bound to the same property
-        -- so typing works in either mode.
-        local function apiKeyRow(keyProp, showProp)
+        -- API key row — multi-line so long keys (especially Claude's) are
+        -- readable without horizontal scrolling.
+        local function apiKeyRow(keyProp)
             return f:row {
                 f:static_text {
                     title     = "API Key:",
                     width     = LrView.share("label_width"),
                     alignment = "right",
                 },
-                f:password_field {
-                    value          = LrView.bind(keyProp),
-                    visible        = LrView.bind {
-                        key       = showProp,
-                        transform = function(v) return not v end,
-                    },
-                    width_in_chars = 55,
-                },
                 f:edit_field {
-                    value          = LrView.bind(keyProp),
-                    visible        = LrView.bind(showProp),
-                    width_in_chars = 55,
-                },
-                f:checkbox {
-                    title = "Show",
-                    value = LrView.bind(showProp),
+                    value           = LrView.bind(keyProp),
+                    width_in_chars  = 55,
+                    height_in_lines = 2,
                 },
             }
         end
@@ -468,7 +448,7 @@ LrTasks.startAsyncTask(function()
                     identifier = "claude",
                     title      = "Claude",
 
-                    apiKeyRow("claudeApiKey", "showClaudeKey"),
+                    apiKeyRow("claudeApiKey"),
                     f:row {
                         f:static_text {
                             title     = "Model:",
@@ -497,7 +477,7 @@ LrTasks.startAsyncTask(function()
                     identifier = "openai",
                     title      = "OpenAI",
 
-                    apiKeyRow("openaiApiKey", "showOpenaiKey"),
+                    apiKeyRow("openaiApiKey"),
                     f:row {
                         f:static_text {
                             title     = "Model:",
@@ -526,7 +506,7 @@ LrTasks.startAsyncTask(function()
                     identifier = "gemini",
                     title      = "Gemini",
 
-                    apiKeyRow("geminiApiKey", "showGeminiKey"),
+                    apiKeyRow("geminiApiKey"),
                     f:row {
                         f:static_text {
                             title     = "Model:",
