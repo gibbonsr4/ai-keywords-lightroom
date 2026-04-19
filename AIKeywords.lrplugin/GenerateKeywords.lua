@@ -252,10 +252,12 @@ LrTasks.startAsyncTask(function()
             if confirm ~= "ok" then return end
         end
 
-        -- Clean up orphaned temp files from interrupted runs
+        -- Clean up orphaned temp files from interrupted runs.
+        -- Shell-quote TEMP_DIR so a weird TMPDIR value can't inject commands;
+        -- the glob stays outside the quotes so shell expansion still works.
         pcall(function()
-            local td = Engine.TEMP_DIR
-            LrTasks.execute(string.format("rm -f %s/ai_kw_req_* %s/ai_kw_resp_* %s/ai_kw_cfg_* 2>/dev/null", td, td, td))
+            local td = Engine.shellEscape(Engine.TEMP_DIR)
+            LrTasks.execute(string.format("rm -f %s/ai_kw_* 2>/dev/null", td))
         end)
 
         -- Initialize logger

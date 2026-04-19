@@ -40,16 +40,18 @@ local function cloudModelItems(models)
 end
 
 -- ── Query Ollama version ────────────────────────────────────────────────
-local json = dofile(_PLUGIN.path .. '/dkjson.lua')
+local LrDate = import 'LrDate'
+local json   = dofile(_PLUGIN.path .. '/dkjson.lua')
 
 local function getOllamaVersion(ollamaUrl)
-    local tmpCfg = Engine.TEMP_DIR .. "/ai_kw_ver_cfg.txt"
-    local tmpOut = Engine.TEMP_DIR .. "/ai_kw_ver.json"
+    local ts = tostring(math.floor(LrDate.currentTime() * 1000))
+    local tmpCfg = Engine.TEMP_DIR .. "/ai_kw_ver_cfg_" .. ts .. ".txt"
+    local tmpOut = Engine.TEMP_DIR .. "/ai_kw_ver_" .. ts .. ".json"
 
     local cfh = io.open(tmpCfg, "w")
     if not cfh then return nil end
     cfh:write("-s\n")
-    cfh:write(string.format('url = "%s/api/version"\n', ollamaUrl))
+    cfh:write(string.format('url = "%s/api/version"\n', Engine.escapeCurlConfigValue(ollamaUrl)))
     cfh:write("max-time = 3\n")
     cfh:close()
 
@@ -834,10 +836,13 @@ LrTasks.startAsyncTask(function()
             prefs.openaiModel      = props.openaiModel
             prefs.geminiModel      = props.geminiModel
 
-            -- Store API keys in macOS Keychain, clear from plaintext prefs
-            Prefs.storeApiKey("claude_api_key", props.claudeApiKey)
-            Prefs.storeApiKey("openai_api_key", props.openaiApiKey)
-            Prefs.storeApiKey("gemini_api_key", props.geminiApiKey)
+            -- Store API keys in macOS Keychain, clear from plaintext prefs.
+            -- Strip whitespace here (newlines from paste, leading/trailing
+            -- spaces) so stored keys are always clean.
+            local function cleanKey(k) return (k or ""):gsub("%s+", "") end
+            Prefs.storeApiKey("claude_api_key", cleanKey(props.claudeApiKey))
+            Prefs.storeApiKey("openai_api_key", cleanKey(props.openaiApiKey))
+            Prefs.storeApiKey("gemini_api_key", cleanKey(props.geminiApiKey))
             prefs.claudeApiKey     = nil
             prefs.openaiApiKey     = nil
             prefs.geminiApiKey     = nil
