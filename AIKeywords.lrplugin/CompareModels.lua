@@ -34,8 +34,10 @@ local function showSelectionDialog(photo, settings)
     -- Check Ollama status
     local installed, ollamaRunning = Engine.getInstalledModels(settings.ollamaUrl)
 
-    -- Use bundled model list (no network call)
-    local activeModels = Engine.VISION_MODELS
+    -- Use bundled model list (no network call). Copy the shared table so the
+    -- append below doesn't mutate module-level state across dialog opens.
+    local activeModels = {}
+    for _, m in ipairs(Engine.VISION_MODELS) do table.insert(activeModels, m) end
 
     -- If user's current model isn't in the list, add it
     local found = false
@@ -355,7 +357,8 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
     local folderAliases = Engine.parseAliases(settings.folderAliases)
     local folderHint = nil
     if settings.useFolderContext then
-        local parts = Engine.getFolderContext(photo, catalog, folderAliases)
+        local rootPaths = Engine.getCatalogRootPaths(catalog)
+        local parts = Engine.getFolderContext(photo, rootPaths, folderAliases)
         if #parts > 0 then
             folderHint = table.concat(parts, " > ")
         end

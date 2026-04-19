@@ -317,12 +317,29 @@ function M.parseAliases(aliasStr)
 end
 
 -- ── Folder context ────────────────────────────────────────────────────────
-function M.getFolderContext(photo, catalog, aliases)
-    local fullPath = photo:getRawMetadata('path')
-    local relPath = fullPath
+-- Compute once per run, not per photo: LR SDK's catalog:getFolders() returns
+-- fresh objects each call and each rootFolder:getPath() hits the catalog.
+function M.getCatalogRootPaths(catalog)
+    local roots = {}
     for _, rootFolder in ipairs(catalog:getFolders()) do
         local rootPath = rootFolder:getPath()
         if rootPath:sub(-1) ~= "/" then rootPath = rootPath .. "/" end
+        table.insert(roots, rootPath)
+    end
+    return roots
+end
+
+-- `rootPaths` is a precomputed list from getCatalogRootPaths. For backward
+-- compatibility a catalog object is also accepted (detected via getFolders),
+-- in which case we compute the roots on the fly.
+function M.getFolderContext(photo, rootPaths, aliases)
+    if type(rootPaths) ~= "table" then
+        -- A catalog object was passed (legacy callers).
+        rootPaths = M.getCatalogRootPaths(rootPaths)
+    end
+    local fullPath = photo:getRawMetadata('path')
+    local relPath = fullPath
+    for _, rootPath in ipairs(rootPaths) do
         if fullPath:sub(1, #rootPath) == rootPath then
             relPath = fullPath:sub(#rootPath + 1); break
         end
@@ -542,11 +559,22 @@ function M.buildPrompt(settings, folderHint, gpsInfo)
     end
 
     -- Trusted output-format block — always last so it wins on conflict.
-    table.insert(parts,
-        string.format("Return up to %d keywords.", settings.maxKeywords) ..
-        " Return ONLY a comma-separated list — no sentences, no numbering, no explanation." ..
+    -- Cloud providers (Claude, OpenAI, Gemini) enforce a JSON schema at the
+    -- API level, so the "comma-separated list" directive conflicts with the
+    -- schema and wastes tokens. Only Ollama needs the CSV hint.
+    -- `settings.provider` may be nil in CompareModels (same prompt is shared
+    -- across providers). In that case we keep the CSV hint — it's required
+    -- for any Ollama model in the mix and harmless for cloud models whose
+    -- schema wins anyway.
+    local csvProvider = (settings.provider == nil) or (settings.provider == "ollama")
+    local fmtBlock = string.format("Return up to %d keywords.", settings.maxKeywords)
+    if csvProvider then
+        fmtBlock = fmtBlock ..
+            " Return ONLY a comma-separated list — no sentences, no numbering, no explanation."
+    end
+    fmtBlock = fmtBlock ..
         " Do not include GPS coordinates, folder paths, or metadata in your keywords."
-    )
+    table.insert(parts, fmtBlock)
 
     return table.concat(parts, "\n\n")
 end
@@ -707,26 +735,36 @@ function M.curlPost(cfgPath, tmpIn, tmpOut, imgSize, timeoutSecs)
     return result, nil
 end
 
--- ── Ollama provider ──────────────────────────────────────────────────────
-function M.queryOllama(img, prompt, modelName, ollamaUrl, timeoutSecs)
-    local ts = tostring(math.floor(LrDate.currentTime() * 1000))
-    local encodeOk, body = pcall(json.encode, {
-        model    = modelName,
-        stream   = false,
-        messages = {{
-            role    = "user",
-            content = prompt,
-            images  = { img.base64 },
-        }}
-    })
-    if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
+-- ── Shared provider transport ────────────────────────────────────────────
+-- All four providers speak HTTP+JSON with the same request/response shape:
+-- encode a body, write a curl config, POST via curlPost, decode JSON, pull
+-- text out of a provider-specific field. This helper owns that pipeline so
+-- each provider is just "build body + extract text" — no copy-pasted temp
+-- file handling or HTTP-status checks to drift between implementations.
+--
+-- spec = {
+--   providerName = "Ollama" | "Claude" | ...,
+--   url          = string,
+--   headers      = { "Header: value", ... },
+--   body         = table  (will be json.encode'd),
+--   img          = { base64, fileSize },   -- base64 unused here, fileSize for errors
+--   timeoutSecs  = number,
+--   extract      = function(decoded) -> (text, err),
+-- }
+function M.queryAPI(spec)
+    local providerName = spec.providerName or "API"
 
+    local encodeOk, bodyJson = pcall(json.encode, spec.body)
+    if not encodeOk then
+        return nil, "JSON encode failed: " .. tostring(bodyJson)
+    end
+
+    local ts = tostring(math.floor(LrDate.currentTime() * 1000))
     local tmpCfg = M.TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
     local tmpIn  = M.TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
     local tmpOut = M.TEMP_DIR .. "/ai_kw_resp_" .. ts .. ".json"
 
-    if not M.writeCurlConfig(tmpCfg, ollamaUrl .. "/api/chat",
-            { "Content-Type: application/json" }, timeoutSecs) then
+    if not M.writeCurlConfig(tmpCfg, spec.url, spec.headers, spec.timeoutSecs) then
         return nil, "Could not write curl config file"
     end
 
@@ -735,242 +773,177 @@ function M.queryOllama(img, prompt, modelName, ollamaUrl, timeoutSecs)
         M.safeDelete(tmpCfg)  -- tmpCfg may contain the API key
         return nil, "Could not write temp file: " .. tmpIn
     end
-    fh:write(body); fh:close()
+    fh:write(bodyJson); fh:close()
 
-    local result, err = M.curlPost(tmpCfg, tmpIn, tmpOut, img.fileSize, timeoutSecs)
+    local result, err = M.curlPost(tmpCfg, tmpIn, tmpOut, spec.img.fileSize, spec.timeoutSecs)
     if not result then return nil, err end
 
     local ok, decoded = pcall(function() return json.decode(result) end)
     if not ok or type(decoded) ~= "table" then
-        return nil, "Could not parse Ollama response: " .. tostring(result):sub(1, 200)
-    end
-    if not (decoded.message and decoded.message.content) then
-        return nil, "Unexpected Ollama response: " .. tostring(result):sub(1, 200)
+        return nil, "Could not parse " .. providerName .. " response: " .. tostring(result):sub(1, 200)
     end
 
-    return decoded.message.content, nil
+    -- Normalize provider error shapes (all four return `{ error: ... }` on
+    -- application-level errors; curlPost already caught HTTP-level errors).
+    if decoded.error then
+        local msg = "Unknown"
+        if type(decoded.error) == "table" and decoded.error.message then
+            msg = decoded.error.message
+        elseif type(decoded.error) == "string" then
+            msg = decoded.error
+        end
+        return nil, providerName .. " API error: " .. msg
+    end
+
+    local text, extractErr = spec.extract(decoded)
+    if text then return text, nil end
+    return nil, extractErr
+        or ("Unexpected " .. providerName .. " response: " .. tostring(result):sub(1, 200))
+end
+
+-- ── Ollama provider ──────────────────────────────────────────────────────
+function M.queryOllama(img, prompt, modelName, ollamaUrl, timeoutSecs)
+    return M.queryAPI({
+        providerName = "Ollama",
+        url          = ollamaUrl .. "/api/chat",
+        headers      = { "Content-Type: application/json" },
+        body = {
+            model    = modelName,
+            stream   = false,
+            messages = {{
+                role    = "user",
+                content = prompt,
+                images  = { img.base64 },
+            }},
+        },
+        img         = img,
+        timeoutSecs = timeoutSecs,
+        extract = function(decoded)
+            if decoded.message and decoded.message.content then
+                return decoded.message.content, nil
+            end
+            return nil, nil
+        end,
+    })
 end
 
 -- ── Claude API provider ──────────────────────────────────────────────────
 function M.queryClaude(img, prompt, claudeModel, apiKey, timeoutSecs)
-    local ts = tostring(math.floor(LrDate.currentTime() * 1000))
-    local encodeOk, body = pcall(json.encode, {
-        model      = claudeModel,
-        max_tokens = 1024,
-        messages   = {{
-            role    = "user",
-            content = {
-                {
-                    type   = "image",
-                    source = {
-                        type       = "base64",
-                        media_type = "image/jpeg",
-                        data       = img.base64,
-                    },
+    local cleanKey = (apiKey or ""):gsub("%s+", "")
+    return M.queryAPI({
+        providerName = "Claude",
+        url          = "https://api.anthropic.com/v1/messages",
+        headers      = {
+            "x-api-key: " .. cleanKey,
+            "anthropic-version: 2023-06-01",
+            "content-type: application/json",
+        },
+        body = {
+            model      = claudeModel,
+            max_tokens = 1024,
+            messages   = {{
+                role    = "user",
+                content = {
+                    { type = "image", source = { type = "base64", media_type = "image/jpeg", data = img.base64 } },
+                    { type = "text",  text = prompt },
                 },
-                {
-                    type = "text",
-                    text = prompt,
-                },
-            },
-        }},
-        output_config = {
-            format = {
-                type   = "json_schema",
-                schema = M.KEYWORD_SCHEMA,
+            }},
+            output_config = {
+                format = { type = "json_schema", schema = M.KEYWORD_SCHEMA },
             },
         },
-    })
-    if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
-
-    local cleanKey = apiKey:gsub("%s+", "")
-
-    local tmpCfg = M.TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
-    local tmpIn  = M.TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
-    local tmpOut = M.TEMP_DIR .. "/ai_kw_resp_" .. ts .. ".json"
-
-    if not M.writeCurlConfig(tmpCfg, "https://api.anthropic.com/v1/messages", {
-        "x-api-key: " .. cleanKey,
-        "anthropic-version: 2023-06-01",
-        "content-type: application/json",
-    }, timeoutSecs) then
-        return nil, "Could not write curl config file"
-    end
-
-    local fh = io.open(tmpIn, "w")
-    if not fh then
-        M.safeDelete(tmpCfg)  -- tmpCfg may contain the API key
-        return nil, "Could not write temp file: " .. tmpIn
-    end
-    fh:write(body); fh:close()
-
-    local result, err = M.curlPost(tmpCfg, tmpIn, tmpOut, img.fileSize, timeoutSecs)
-    if not result then return nil, err end
-
-    local ok, decoded = pcall(function() return json.decode(result) end)
-    if not ok or type(decoded) ~= "table" then
-        return nil, "Could not parse Claude response: " .. tostring(result):sub(1, 200)
-    end
-
-    if decoded.error then
-        return nil, "Claude API error: " .. (decoded.error.message or "Unknown")
-    end
-
-    if decoded.content and type(decoded.content) == "table" then
-        for _, block in ipairs(decoded.content) do
-            if block.type == "text" and block.text then
-                return block.text, nil
+        img         = img,
+        timeoutSecs = timeoutSecs,
+        extract = function(decoded)
+            if decoded.content and type(decoded.content) == "table" then
+                for _, block in ipairs(decoded.content) do
+                    if block.type == "text" and block.text then
+                        return block.text, nil
+                    end
+                end
             end
-        end
-    end
-
-    return nil, "Unexpected Claude response: " .. tostring(result):sub(1, 200)
+            return nil, nil
+        end,
+    })
 end
 
 -- ── OpenAI API provider ────────────────────────────────────────────────
 function M.queryOpenAI(img, prompt, openaiModel, apiKey, timeoutSecs)
-    local ts = tostring(math.floor(LrDate.currentTime() * 1000))
-    local encodeOk, body = pcall(json.encode, {
-        model                = openaiModel,
-        max_completion_tokens = 1024,
-        messages   = {{
-            role    = "user",
-            content = {
-                {
-                    type      = "image_url",
-                    image_url = {
-                        url = "data:image/jpeg;base64," .. img.base64,
-                    },
+    local cleanKey = (apiKey or ""):gsub("%s+", "")
+    return M.queryAPI({
+        providerName = "OpenAI",
+        url          = "https://api.openai.com/v1/chat/completions",
+        headers      = {
+            "Authorization: Bearer " .. cleanKey,
+            "Content-Type: application/json",
+        },
+        body = {
+            model                 = openaiModel,
+            max_completion_tokens = 1024,
+            messages = {{
+                role    = "user",
+                content = {
+                    { type = "image_url", image_url = { url = "data:image/jpeg;base64," .. img.base64 } },
+                    { type = "text",      text = prompt },
                 },
-                {
-                    type = "text",
-                    text = prompt,
+            }},
+            response_format = {
+                type        = "json_schema",
+                json_schema = {
+                    name   = "keywords",
+                    strict = true,
+                    schema = M.KEYWORD_SCHEMA,
                 },
-            },
-        }},
-        response_format = {
-            type        = "json_schema",
-            json_schema = {
-                name   = "keywords",
-                strict = true,
-                schema = M.KEYWORD_SCHEMA,
             },
         },
+        img         = img,
+        timeoutSecs = timeoutSecs,
+        extract = function(decoded)
+            if decoded.choices and type(decoded.choices) == "table" and decoded.choices[1] then
+                local msg = decoded.choices[1].message
+                if msg and msg.content then return msg.content, nil end
+            end
+            return nil, nil
+        end,
     })
-    if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
-
-    local cleanKey = apiKey:gsub("%s+", "")
-
-    local tmpCfg = M.TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
-    local tmpIn  = M.TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
-    local tmpOut = M.TEMP_DIR .. "/ai_kw_resp_" .. ts .. ".json"
-
-    if not M.writeCurlConfig(tmpCfg, "https://api.openai.com/v1/chat/completions", {
-        "Authorization: Bearer " .. cleanKey,
-        "Content-Type: application/json",
-    }, timeoutSecs) then
-        return nil, "Could not write curl config file"
-    end
-
-    local fh = io.open(tmpIn, "w")
-    if not fh then
-        M.safeDelete(tmpCfg)  -- tmpCfg may contain the API key
-        return nil, "Could not write temp file: " .. tmpIn
-    end
-    fh:write(body); fh:close()
-
-    local result, err = M.curlPost(tmpCfg, tmpIn, tmpOut, img.fileSize, timeoutSecs)
-    if not result then return nil, err end
-
-    local ok, decoded = pcall(function() return json.decode(result) end)
-    if not ok or type(decoded) ~= "table" then
-        return nil, "Could not parse OpenAI response: " .. tostring(result):sub(1, 200)
-    end
-
-    if decoded.error then
-        return nil, "OpenAI API error: " .. (decoded.error.message or "Unknown")
-    end
-
-    if decoded.choices and type(decoded.choices) == "table" and decoded.choices[1] then
-        local msg = decoded.choices[1].message
-        if msg and msg.content then
-            return msg.content, nil
-        end
-    end
-
-    return nil, "Unexpected OpenAI response: " .. tostring(result):sub(1, 200)
 end
 
 -- ── Gemini API provider ────────────────────────────────────────────────
 function M.queryGemini(img, prompt, geminiModel, apiKey, timeoutSecs)
-    local ts = tostring(math.floor(LrDate.currentTime() * 1000))
-    local encodeOk, body = pcall(json.encode, {
-        contents = {{
-            parts = {
-                {
-                    inlineData = {
-                        mimeType = "image/jpeg",
-                        data     = img.base64,
-                    },
-                },
-                {
-                    text = prompt,
-                },
-            },
-        }},
-        generationConfig = {
-            responseMimeType = "application/json",
-            responseSchema   = M.KEYWORD_SCHEMA_GEMINI,
-        },
-    })
-    if not encodeOk then return nil, "JSON encode failed: " .. tostring(body) end
-
-    local cleanKey = apiKey:gsub("%s+", "")
+    local cleanKey = (apiKey or ""):gsub("%s+", "")
     local url = string.format(
         "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
         geminiModel, cleanKey
     )
-
-    local tmpCfg = M.TEMP_DIR .. "/ai_kw_cfg_" .. ts .. ".txt"
-    local tmpIn  = M.TEMP_DIR .. "/ai_kw_req_" .. ts .. ".json"
-    local tmpOut = M.TEMP_DIR .. "/ai_kw_resp_" .. ts .. ".json"
-
-    if not M.writeCurlConfig(tmpCfg, url, {
-        "Content-Type: application/json",
-    }, timeoutSecs) then
-        return nil, "Could not write curl config file"
-    end
-
-    local fh = io.open(tmpIn, "w")
-    if not fh then
-        M.safeDelete(tmpCfg)  -- tmpCfg may contain the API key
-        return nil, "Could not write temp file: " .. tmpIn
-    end
-    fh:write(body); fh:close()
-
-    local result, err = M.curlPost(tmpCfg, tmpIn, tmpOut, img.fileSize, timeoutSecs)
-    if not result then return nil, err end
-
-    local ok, decoded = pcall(function() return json.decode(result) end)
-    if not ok or type(decoded) ~= "table" then
-        return nil, "Could not parse Gemini response: " .. tostring(result):sub(1, 200)
-    end
-
-    if decoded.error then
-        return nil, "Gemini API error: " .. (decoded.error.message or "Unknown")
-    end
-
-    if decoded.candidates and type(decoded.candidates) == "table" and decoded.candidates[1] then
-        local content = decoded.candidates[1].content
-        if content and content.parts and type(content.parts) == "table" and content.parts[1] then
-            local text = content.parts[1].text
-            if text then
-                return text, nil
+    return M.queryAPI({
+        providerName = "Gemini",
+        url          = url,
+        headers      = { "Content-Type: application/json" },
+        body = {
+            contents = {{
+                parts = {
+                    { inlineData = { mimeType = "image/jpeg", data = img.base64 } },
+                    { text       = prompt },
+                },
+            }},
+            generationConfig = {
+                responseMimeType = "application/json",
+                responseSchema   = M.KEYWORD_SCHEMA_GEMINI,
+            },
+        },
+        img         = img,
+        timeoutSecs = timeoutSecs,
+        extract = function(decoded)
+            if decoded.candidates and type(decoded.candidates) == "table" and decoded.candidates[1] then
+                local content = decoded.candidates[1].content
+                if content and content.parts and type(content.parts) == "table" and content.parts[1] then
+                    local text = content.parts[1].text
+                    if text then return text, nil end
+                end
             end
-        end
-    end
-
-    return nil, "Unexpected Gemini response: " .. tostring(result):sub(1, 200)
+            return nil, nil
+        end,
+    })
 end
 
 return M
