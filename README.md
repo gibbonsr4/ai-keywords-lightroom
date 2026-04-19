@@ -171,6 +171,8 @@ Enable logging in Settings to get a timestamped log file for each run. Logs are 
 - Raw model response (first 500 chars)
 - Per-image timing
 
+GPS coordinates are intentionally **redacted** from logs — when GPS context is enabled, the log records only that coordinates were sent to the model, not the actual values. Logs persist on disk and are occasionally shared for support, so redaction avoids leaking exact locations.
+
 Log files are saved to the configured folder (default: `~/Documents`).
 
 ---
