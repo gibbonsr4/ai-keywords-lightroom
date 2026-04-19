@@ -92,15 +92,16 @@ M.SKIP_FOLDERS = {
 -- ── Recommended vision models for Ollama ──────────────────────────────────
 -- Bundled list — ships with the plugin.  Users can check for updates via
 -- the "Check for New Models" button in Settings (fetches models.json).
+-- Ordered smallest → largest by RAM footprint.
 M.VISION_MODELS = {
-    { value = "gemma3:4b",            label = "Gemma 3 4B",             info = "~3GB RAM  |  Popular, versatile vision model" },
-    { value = "qwen2.5vl:3b",        label = "Qwen2.5-VL 3B",          info = "~2GB RAM  |  Fastest, good quality  |  Requires Ollama 0.7+" },
-    { value = "minicpm-v",            label = "MiniCPM-V 8B",           info = "~5GB RAM  |  Fast, strong detail recognition" },
-    { value = "qwen2.5vl:7b",        label = "Qwen2.5-VL 7B",          info = "~5GB RAM  |  Best local quality, accurate IDs  |  Requires Ollama 0.7+" },
-    { value = "qwen3-vl:8b",         label = "Qwen3-VL 8B",            info = "~5GB RAM  |  Next-gen Qwen vision  |  Requires Ollama 0.7+" },
-    { value = "gemma3:12b",          label = "Gemma 3 12B",            info = "~8GB RAM  |  High quality, strong all-rounder" },
-    { value = "llama3.2-vision:11b",  label = "Llama 3.2 Vision 11B",   info = "~8GB RAM  |  Solid all-rounder" },
-    { value = "moondream",            label = "Moondream 2",            info = "~1GB RAM  |  Tiny, fast, basic keywords only" },
+    { value = "moondream",               label = "Moondream 2",      info = "~1GB RAM  |  Tiny fallback, basic keywords only",                           promptProfile = "compact"  },
+    { value = "qwen3-vl:4b",             label = "Qwen3-VL 4B",      info = "~3GB RAM  |  Fastest decent tier, next-gen Qwen  |  Requires Ollama 0.7+",  promptProfile = "standard" },
+    { value = "qwen2.5vl:7b",            label = "Qwen2.5-VL 7B",    info = "~5GB RAM  |  Battle-tested, accurate IDs  |  Requires Ollama 0.7+",        promptProfile = "standard" },
+    { value = "gemma4:e4b",              label = "Gemma 4 E4B",      info = "~6GB RAM  |  Mid-tier default, multimodal out of the box",                 promptProfile = "standard" },
+    { value = "openbmb/minicpm-v4.5:8b", label = "MiniCPM-V 4.5 8B", info = "~6GB RAM  |  Strong detail/OCR, built on Qwen3+SigLIP2",                    promptProfile = "standard" },
+    { value = "qwen3-vl:8b",             label = "Qwen3-VL 8B",      info = "~6GB RAM  |  Main quality tier, next-gen Qwen  |  Requires Ollama 0.7+",   promptProfile = "standard" },
+    { value = "gemma4:31b",              label = "Gemma 4 31B",      info = "~14GB RAM  |  High-quality dense, strong all-rounder",                     promptProfile = "standard" },
+    { value = "qwen3-vl:30b-a3b",        label = "Qwen3-VL 30B MoE", info = "~20GB RAM  |  MoE top-tier, 32GB+ Apple Silicon  |  Requires Ollama 0.7+", promptProfile = "standard" },
 }
 
 -- ── Cloud provider models ───────────────────────────────────────────────
@@ -111,17 +112,19 @@ M.VISION_MODELS = {
 M.CLAUDE_MODELS = {
     { value = "claude-haiku-4-5-20251001", label = "Claude Haiku 4.5",  cost = "~$0.002", promptProfile = "compact"  },
     { value = "claude-sonnet-4-6",         label = "Claude Sonnet 4.6", cost = "~$0.007", promptProfile = "standard" },
+    { value = "claude-opus-4-7",           label = "Claude Opus 4.7",   cost = "~$0.025", promptProfile = "standard" },
 }
 
 M.OPENAI_MODELS = {
-    { value = "gpt-5-mini-2025-08-07", label = "GPT-5 Mini",  cost = "~$0.001" },
-    { value = "gpt-5.4",               label = "GPT-5.4",     cost = "~$0.007" },
+    { value = "gpt-5.4-nano", label = "GPT-5.4 Nano", cost = "~$0.0003", promptProfile = "standard" },
+    { value = "gpt-5.4-mini", label = "GPT-5.4 Mini", cost = "~$0.001",  promptProfile = "standard" },
+    { value = "gpt-5.4",      label = "GPT-5.4",      cost = "~$0.007",  promptProfile = "standard" },
 }
 
 M.GEMINI_MODELS = {
-    { value = "gemini-2.5-flash-lite", label = "Gemini 2.5 Flash-Lite", cost = "~$0.0003" },
-    { value = "gemini-2.5-flash",      label = "Gemini 2.5 Flash",      cost = "~$0.001" },
-    { value = "gemini-2.5-pro",        label = "Gemini 2.5 Pro",        cost = "~$0.005" },
+    { value = "gemini-3-1-flash-lite", label = "Gemini 3.1 Flash-Lite", cost = "~$0.0002", promptProfile = "standard" },
+    { value = "gemini-3-flash",        label = "Gemini 3 Flash",        cost = "~$0.0008", promptProfile = "standard" },
+    { value = "gemini-3-pro",          label = "Gemini 3 Pro",          cost = "~$0.003",  promptProfile = "standard" },
 }
 
 -- ── Remote model list URL (opt-in refresh via Settings) ──────────────
