@@ -124,10 +124,17 @@ M.OPENAI_MODELS = {
 -- Gemini 3 model IDs use dots for version numbers and a "-preview" suffix.
 -- These are the current IDs as of April 2026; "gemini-3-pro-preview" was
 -- shut down 2026-03-09 in favour of the 3.1 variant.
+-- Gemini 2.5 models are kept at the bottom for landmark-ID testing — their
+-- training data recognizes some specific properties (resorts, smaller
+-- landmarks) that Gemini 3 preview does not. Being phased out by Google;
+-- may be deprecated without warning.
 M.GEMINI_MODELS = {
-    { value = "gemini-3.1-flash-lite-preview", label = "Gemini 3.1 Flash-Lite", cost = "~$0.0002", promptProfile = "standard" },
-    { value = "gemini-3-flash-preview",        label = "Gemini 3 Flash",        cost = "~$0.0008", promptProfile = "standard" },
-    { value = "gemini-3.1-pro-preview",        label = "Gemini 3.1 Pro",        cost = "~$0.003",  promptProfile = "standard" },
+    { value = "gemini-3.1-flash-lite-preview", label = "Gemini 3.1 Flash-Lite",          cost = "~$0.0002", promptProfile = "standard" },
+    { value = "gemini-3-flash-preview",        label = "Gemini 3 Flash",                 cost = "~$0.0008", promptProfile = "standard" },
+    { value = "gemini-3.1-pro-preview",        label = "Gemini 3.1 Pro",                 cost = "~$0.003",  promptProfile = "standard" },
+    { value = "gemini-2.5-flash-lite",         label = "Gemini 2.5 Flash-Lite (legacy)", cost = "~$0.0003", promptProfile = "standard" },
+    { value = "gemini-2.5-flash",              label = "Gemini 2.5 Flash (legacy)",      cost = "~$0.001",  promptProfile = "standard" },
+    { value = "gemini-2.5-pro",                label = "Gemini 2.5 Pro (legacy)",        cost = "~$0.005",  promptProfile = "standard" },
 }
 
 -- ── Remote model list URL (opt-in refresh via Settings) ──────────────
