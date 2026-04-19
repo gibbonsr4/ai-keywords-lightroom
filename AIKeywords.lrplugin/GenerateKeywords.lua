@@ -167,6 +167,46 @@ local function queryModel(photo, folderHint, gpsInfo, settings, imageIndex)
 end
 
 -- ── Catalog keyword writer ───────────────────────────────────────────────
+-- LrCatalog:createKeyword(name, synonyms, includeOnExport, parent, returnExisting)
+-- with returnExisting=true and a parent can return a sibling *root-level*
+-- keyword with the same name instead of creating (or returning) one under the
+-- parent. That's the documented "stranded keyword" bug — once a keyword is
+-- at root, `createKeyword` with a parent never relocates it.
+--
+-- Workaround: look up among the parent's children first (case-insensitive,
+-- matching LR's own keyword deduping). Only call createKeyword when we've
+-- confirmed the keyword doesn't exist under the parent.
+local function findOrCreateUnderParent(catalog, name, parent)
+    if parent then
+        local nameLower = name:lower()
+        local ok, children = pcall(function() return parent:getChildren() end)
+        if ok and children then
+            for _, child in ipairs(children) do
+                local okName, childName = pcall(function() return child:getName() end)
+                if okName and childName and childName:lower() == nameLower then
+                    return child
+                end
+            end
+        end
+        -- Not under parent — create there. returnExisting=false means the SDK
+        -- must not substitute a root-level namesake. Wrapped in pcall because
+        -- some SDK versions raise on collision rather than returning nil.
+        local okCreate, kw = pcall(function()
+            return catalog:createKeyword(name, {}, true, parent, false)
+        end)
+        if okCreate and kw then return kw end
+        -- Extreme-edge fallback: allow returnExisting so we don't silently
+        -- drop the keyword. This can still strand at root on pathological
+        -- catalogs, but preserves legacy behaviour.
+        local okFb, kwFb = pcall(function()
+            return catalog:createKeyword(name, {}, true, parent, true)
+        end)
+        if okFb then return kwFb end
+        return nil
+    end
+    return catalog:createKeyword(name, {}, true, nil, true)
+end
+
 -- Returns "executed", "aborted", or an error string.
 local function applyKeywords(catalog, photo, keywords, filename, settings)
     local writeResult = catalog:withWriteAccessDo(
@@ -179,13 +219,7 @@ local function applyKeywords(catalog, photo, keywords, filename, settings)
             end
 
             for _, kwText in ipairs(keywords) do
-                -- First call: returnExisting=true only when no parent (flat keywords).
-                -- With a parent, returnExisting=false avoids returning a stale root-level
-                -- keyword with the same name. If that fails, retry with returnExisting=true.
-                local kw = catalog:createKeyword(kwText, {}, true, parent, not hasParent)
-                if not kw then
-                    kw = catalog:createKeyword(kwText, {}, true, parent, true)
-                end
+                local kw = findOrCreateUnderParent(catalog, kwText, parent)
                 if kw then photo:addKeyword(kw) end
             end
         end,
