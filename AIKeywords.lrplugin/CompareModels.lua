@@ -372,13 +372,24 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
         end
     end
 
-    -- Build prompt (using override if provided)
-    local promptSettings = {
-        prompt      = promptOverride or settings.prompt,
-        maxKeywords = settings.maxKeywords,
-        basePrompt  = settings.basePrompt,
-    }
-    local prompt = Engine.buildPrompt(promptSettings, folderHint, gpsInfo)
+    -- Build a prompt for a specific model in the comparison. Each model uses
+    -- its production prompt profile (Haiku → compact, others → standard) so
+    -- the comparison reflects what you'd actually get in a real run rather
+    -- than an artificially levelled test. To force identical prompts across
+    -- models, set a custom Advanced → Base prompt in Settings — it wins over
+    -- the per-model profile.
+    local function buildPromptForModel(m)
+        return Engine.buildPrompt({
+            prompt      = promptOverride or settings.prompt,
+            maxKeywords = settings.maxKeywords,
+            basePrompt  = settings.basePrompt,
+            provider    = m.provider,
+            model       = (m.provider == "ollama") and m.model or settings.model,
+            claudeModel = (m.provider == "claude") and m.model or settings.claudeModel,
+            openaiModel = (m.provider == "openai") and m.model or settings.openaiModel,
+            geminiModel = (m.provider == "gemini") and m.model or settings.geminiModel,
+        }, folderHint, gpsInfo)
+    end
 
     -- Pre-render images (once per render size to avoid redundant renders)
     local hasOllama, hasCloud = false, false
@@ -434,6 +445,7 @@ local function runComparison(photo, selectedModels, settings, promptOverride, co
         else
             local queryStart = LrDate.currentTime()
             local raw, err
+            local prompt = buildPromptForModel(m)
 
             if m.provider == "claude" then
                 raw, err = Engine.queryClaude(
@@ -556,45 +568,65 @@ local function showResults(photo, results, promptOverride)
     -- Build prompt info
     local promptInfo = promptOverride
         and "Custom prompt used for this comparison."
-        or "Default prompt from Settings."
+        or "Each model uses its production prompt (custom Settings prompt wins if set)."
+
+    local dialogWidth = math.min(210 * #results, 1050)
+
+    -- Photo thumbnail. LR SDK ships f:catalog_photo for rendering a catalog
+    -- photo inline; wrap in pcall so if it's unavailable the results dialog
+    -- still works (falls back to filename-only header).
+    local photoHeader
+    do
+        local ok, thumbnail = pcall(function()
+            return f:catalog_photo {
+                photo  = photo,
+                width  = 120,
+                height = 80,
+            }
+        end)
+        local info = f:column {
+            spacing = f:label_spacing(),
+            f:row {
+                f:static_text { title = "Photo:  " },
+                f:static_text { title = filename, font = "<system/bold>" },
+            },
+            f:static_text {
+                title      = promptInfo,
+                text_color = LrView.kDisabledColor,
+            },
+        }
+        if ok and thumbnail then
+            photoHeader = f:row { spacing = f:control_spacing(), thumbnail, info }
+        else
+            photoHeader = info
+        end
+    end
 
     local contents = f:column {
         spacing         = f:dialog_spacing(),
         fill_horizontal = 1,
 
-        -- Photo info
-        f:row {
-            f:static_text {
-                title = "Photo:  ",
-            },
-            f:static_text {
-                title = filename,
-                font  = "<system/bold>",
-            },
-        },
-        f:static_text {
-            title      = promptInfo,
-            text_color = LrView.kDisabledColor,
-        },
+        photoHeader,
 
         f:separator { fill_horizontal = 1 },
 
         -- Model results side by side
         f:scrolled_view {
             horizontal_scroller = true,
-            width               = math.min(210 * #results, 1050),
+            width               = dialogWidth,
             height              = 400,
             f:row(columns),
         },
 
         f:separator { fill_horizontal = 1 },
 
-        -- Overlap analysis
+        -- Overlap analysis — constrain width so long shared-keyword lists
+        -- wrap instead of pushing the dialog horizontally.
         f:static_text {
             title           = sharedText,
             text_color      = LrView.kDisabledColor,
-            fill_horizontal = 1,
-            height_in_lines = 2,
+            width           = dialogWidth,
+            height_in_lines = 4,
         },
         f:static_text {
             title      = "★ = unique to this model",
@@ -602,15 +634,18 @@ local function showResults(photo, results, promptOverride)
         },
     }
 
+    -- Button layout: Done is the primary (blue) action so Enter dismisses
+    -- the dialog. Compare Again is secondary. Cancel is hidden via the
+    -- "< ... >" angle-bracket convention.
     local result = LrDialogs.presentModalDialog {
         title      = "Compare Models — Results",
         contents   = contents,
-        actionVerb = "Compare Again",
-        otherVerb  = "Done",
-        cancelVerb = "< exclude",  -- hides the Cancel button
+        actionVerb = "Done",
+        otherVerb  = "Compare Again",
+        cancelVerb = "< exclude >",
     }
 
-    return result == "ok"  -- "ok" = Compare Again, "other" = Done
+    return result == "other"  -- "other" = Compare Again, "ok" = Done
 end
 
 -- ── Entry point ──────────────────────────────────────────────────────────
