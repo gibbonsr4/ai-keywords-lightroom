@@ -55,7 +55,8 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}`
 - Headers: Content-Type: application/json (API key in URL query param)
 - Body: `{ contents: [{ parts: [{ inlineData: { mimeType: "image/jpeg", data: base64 } }, { text: prompt }] }] }`
-- Models: gemini-3-1-flash-lite (~$0.0002/image), gemini-3-flash (~$0.0008/image), gemini-3-pro (~$0.003/image)
+- Models: gemini-3.1-flash-lite-preview (~$0.0002/image), gemini-3-flash-preview (~$0.0008/image), gemini-3.1-pro-preview (~$0.003/image)
+- Note: Gemini 3 IDs use dots and a "-preview" suffix. gemini-3-pro-preview was shut down 2026-03-09 in favour of the 3.1 variant; expect similar promotions as other models graduate from preview.
 
 ## Image Rendering
 - Cloud providers (Claude, OpenAI, Gemini): 1568px long edge

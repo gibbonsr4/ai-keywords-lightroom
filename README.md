@@ -116,7 +116,7 @@ Recommended models, smallest to largest:
 | Setting | Notes |
 |---|---|
 | API Key | Your Google AI API key |
-| Model | Gemini 3.1 Flash-Lite (~$0.0002/image), Gemini 3 Flash (~$0.0008/image), or Gemini 3 Pro (~$0.003/image) |
+| Model | Gemini 3.1 Flash-Lite (~$0.0002/image), Gemini 3 Flash (~$0.0008/image), or Gemini 3.1 Pro (~$0.003/image) — all preview-tier as of April 2026 |
 
 ### Keyword Settings
 
@@ -159,7 +159,7 @@ The parent keyword itself is set to `includeOnExport = false`, so it won't appea
 | Quality | Good general keywords | Excellent, best landmark ID | Very good | Very good |
 | Privacy | Local, nothing leaves your machine | Cloud | Cloud | Cloud |
 
-**Recommendation:** Ollama for casual tagging and privacy. Claude Sonnet 4.6 or Opus 4.7 for accuracy-critical runs. Gemini 3.1 Flash-Lite for cheapest cloud option. Use Compare Models to test which works best for your photos.
+**Recommendation:** Ollama for casual tagging and privacy. Claude Sonnet 4.6 or Opus 4.7 for accuracy-critical runs. Gemini 3.1 Flash-Lite (preview) for cheapest cloud option. Use Compare Models to test which works best for your photos.
 
 ---
 
