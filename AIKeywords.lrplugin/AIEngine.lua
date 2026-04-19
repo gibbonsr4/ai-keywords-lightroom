@@ -121,10 +121,13 @@ M.OPENAI_MODELS = {
     { value = "gpt-5.4",      label = "GPT-5.4",      cost = "~$0.007",  promptProfile = "standard" },
 }
 
+-- Gemini 3 model IDs use dots for version numbers and a "-preview" suffix.
+-- These are the current IDs as of April 2026; "gemini-3-pro-preview" was
+-- shut down 2026-03-09 in favour of the 3.1 variant.
 M.GEMINI_MODELS = {
-    { value = "gemini-3-1-flash-lite", label = "Gemini 3.1 Flash-Lite", cost = "~$0.0002", promptProfile = "standard" },
-    { value = "gemini-3-flash",        label = "Gemini 3 Flash",        cost = "~$0.0008", promptProfile = "standard" },
-    { value = "gemini-3-pro",          label = "Gemini 3 Pro",          cost = "~$0.003",  promptProfile = "standard" },
+    { value = "gemini-3.1-flash-lite-preview", label = "Gemini 3.1 Flash-Lite", cost = "~$0.0002", promptProfile = "standard" },
+    { value = "gemini-3-flash-preview",        label = "Gemini 3 Flash",        cost = "~$0.0008", promptProfile = "standard" },
+    { value = "gemini-3.1-pro-preview",        label = "Gemini 3.1 Pro",        cost = "~$0.003",  promptProfile = "standard" },
 }
 
 -- ── Remote model list URL (opt-in refresh via Settings) ──────────────
