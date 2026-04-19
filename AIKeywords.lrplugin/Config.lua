@@ -184,6 +184,13 @@ LrTasks.startAsyncTask(function()
         props.openaiModel      = current.openaiModel
         props.geminiApiKey     = current.geminiApiKey
         props.geminiModel      = current.geminiModel
+
+        -- Per-provider "Show" toggles for API key masking. Session-only,
+        -- default off. Flipping to true swaps the masked password_field
+        -- for a plain edit_field so the user can read/paste the key.
+        props.showClaudeKey = false
+        props.showOpenaiKey = false
+        props.showGeminiKey = false
         props.maxKeywords      = tostring(current.maxKeywords)
         props.timeoutSecs      = tostring(current.timeoutSecs)
         props.useGPS           = current.useGPS
@@ -196,7 +203,12 @@ LrTasks.startAsyncTask(function()
         props.logFolder        = current.logFolder
         props.folderAliases    = current.folderAliases
         props.basePrompt       = current.basePrompt
-        props.basePromptDisplay = (current.basePrompt ~= "" and current.basePrompt) or Engine.BASE_PROMPT
+        -- Default display reflects the selected model's prompt profile
+        -- (e.g. Haiku gets the compact variant). User-customized prompts
+        -- win and stay across provider/model switches.
+        local initialProfile = Engine.getPromptProfile(current)
+        local initialProfileDefault = Engine.PROMPT_PROFILES[initialProfile] or Engine.BASE_PROMPT
+        props.basePromptDisplay = (current.basePrompt ~= "" and current.basePrompt) or initialProfileDefault
 
         -- Internal state
         props._installed       = installed
@@ -220,11 +232,43 @@ LrTasks.startAsyncTask(function()
         props.ollamaActionTitle = getOllamaActionTitle(ollamaInstalled, ollamaRunning)
         props.installBtnTitle   = getInstallBtnTitle(installed, current.model)
 
+        -- Snapshot of props in the shape Engine.getPromptProfile expects.
+        local function settingsFromProps()
+            return {
+                provider    = props.provider,
+                model       = props.model,
+                claudeModel = props.claudeModel,
+                openaiModel = props.openaiModel,
+                geminiModel = props.geminiModel,
+            }
+        end
+
+        -- Is the current text in the Advanced → Base prompt field still
+        -- equal to one of the known profile defaults? If yes, the user
+        -- hasn't customized, and we can swap to whichever profile the newly
+        -- selected model wants. If no, leave the user's text alone.
+        local function refreshBasePromptIfUnchanged()
+            local currentText = props.basePromptDisplay or ""
+            for _, profileText in pairs(Engine.PROMPT_PROFILES) do
+                if currentText == profileText then
+                    local profile = Engine.getPromptProfile(settingsFromProps())
+                    props.basePromptDisplay =
+                        Engine.PROMPT_PROFILES[profile] or Engine.BASE_PROMPT
+                    return
+                end
+            end
+        end
+
         -- Update model info + install button when selection changes
         props:addObserver("model", function(_, _, newValue)
             props.modelInfo = modelInfoMap[newValue] or ""
             props.installBtnTitle = getInstallBtnTitle(props._installed, newValue)
+            refreshBasePromptIfUnchanged()
         end)
+        props:addObserver("provider",    refreshBasePromptIfUnchanged)
+        props:addObserver("claudeModel", refreshBasePromptIfUnchanged)
+        props:addObserver("openaiModel", refreshBasePromptIfUnchanged)
+        props:addObserver("geminiModel", refreshBasePromptIfUnchanged)
 
         -- Helper to fetch remote model list and merge into activeModels
         local function refreshModelList()
@@ -256,6 +300,36 @@ LrTasks.startAsyncTask(function()
                 end
             end
             props.modelInfo = modelInfoMap[props.model] or ""
+        end
+
+        -- Masked API key row with a "Show" checkbox that reveals the key
+        -- in a plain edit field. Both fields are bound to the same property
+        -- so typing works in either mode.
+        local function apiKeyRow(keyProp, showProp)
+            return f:row {
+                f:static_text {
+                    title     = "API Key:",
+                    width     = LrView.share("label_width"),
+                    alignment = "right",
+                },
+                f:password_field {
+                    value          = LrView.bind(keyProp),
+                    visible        = LrView.bind {
+                        key       = showProp,
+                        transform = function(v) return not v end,
+                    },
+                    width_in_chars = 55,
+                },
+                f:edit_field {
+                    value          = LrView.bind(keyProp),
+                    visible        = LrView.bind(showProp),
+                    width_in_chars = 55,
+                },
+                f:checkbox {
+                    title = "Show",
+                    value = LrView.bind(showProp),
+                },
+            }
         end
 
         local contents = f:column {
@@ -394,18 +468,7 @@ LrTasks.startAsyncTask(function()
                     identifier = "claude",
                     title      = "Claude",
 
-                    f:row {
-                        f:static_text {
-                            title     = "API Key:",
-                            width     = LrView.share("label_width"),
-                            alignment = "right",
-                        },
-                        f:edit_field {
-                            value           = LrView.bind("claudeApiKey"),
-                            width_in_chars  = 55,
-                            height_in_lines = 2,
-                        },
-                    },
+                    apiKeyRow("claudeApiKey", "showClaudeKey"),
                     f:row {
                         f:static_text {
                             title     = "Model:",
@@ -434,18 +497,7 @@ LrTasks.startAsyncTask(function()
                     identifier = "openai",
                     title      = "OpenAI",
 
-                    f:row {
-                        f:static_text {
-                            title     = "API Key:",
-                            width     = LrView.share("label_width"),
-                            alignment = "right",
-                        },
-                        f:edit_field {
-                            value           = LrView.bind("openaiApiKey"),
-                            width_in_chars  = 55,
-                            height_in_lines = 2,
-                        },
-                    },
+                    apiKeyRow("openaiApiKey", "showOpenaiKey"),
                     f:row {
                         f:static_text {
                             title     = "Model:",
@@ -474,18 +526,7 @@ LrTasks.startAsyncTask(function()
                     identifier = "gemini",
                     title      = "Gemini",
 
-                    f:row {
-                        f:static_text {
-                            title     = "API Key:",
-                            width     = LrView.share("label_width"),
-                            alignment = "right",
-                        },
-                        f:edit_field {
-                            value           = LrView.bind("geminiApiKey"),
-                            width_in_chars  = 55,
-                            height_in_lines = 2,
-                        },
-                    },
+                    apiKeyRow("geminiApiKey", "showGeminiKey"),
                     f:row {
                         f:static_text {
                             title     = "Model:",
@@ -759,11 +800,15 @@ LrTasks.startAsyncTask(function()
                     f:push_button {
                         title  = "Reset to Default",
                         action = function()
-                            props.basePromptDisplay = Engine.BASE_PROMPT
+                            -- Reset to the currently-selected model's profile
+                            -- default rather than always the standard prompt.
+                            local profile = Engine.getPromptProfile(settingsFromProps())
+                            props.basePromptDisplay =
+                                Engine.PROMPT_PROFILES[profile] or Engine.BASE_PROMPT
                         end,
                     },
                     f:static_text {
-                        title      = "Restores the built-in keywording prompt",
+                        title      = "Restores the built-in prompt for the selected model",
                         text_color = LrView.kDisabledColor,
                     },
                 },

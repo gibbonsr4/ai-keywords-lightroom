@@ -54,11 +54,20 @@ local function stringPref(prefs, key, allowEmpty)
 end
 
 -- Retrieve an API key: try Keychain first, fall back to prefs (migration).
+-- If the keychain is empty but a plaintext pref exists from a pre-1.1 install,
+-- auto-migrate it into the keychain on first read so legacy users don't need
+-- to open Settings + click Save to upgrade. Plaintext is only cleared when
+-- the keychain store actually succeeds.
 local function apiKeyPref(prefs, keychainKey, prefsKey)
     local ok, key = pcall(LrPasswords.retrieve, keychainKey)
     if ok and key and key ~= "" then return key end
-    -- Fallback to plaintext prefs (pre-migration)
-    return stringPref(prefs, prefsKey, true)
+
+    local plaintext = stringPref(prefs, prefsKey, true)
+    if plaintext and plaintext ~= "" then
+        local stored = pcall(LrPasswords.store, keychainKey, plaintext)
+        if stored then prefs[prefsKey] = nil end
+    end
+    return plaintext
 end
 
 -- Store an API key in the Keychain.
