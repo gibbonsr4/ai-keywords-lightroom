@@ -71,10 +71,12 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - Qwen2.5-VL 7B (local) is surprisingly good — correctly ID'd sugarcane in Dominican Republic
 - GPS coordinates work but models sometimes leak them into keywords (parser filters these)
 - Folder aliases are effective — "DR" → "Dominican Republic" successfully influences keywords
-- The prompt is assembled by buildPrompt() in this order: [GPS/folder context] + [BASE_PROMPT] + [user custom instructions] + [output format]
-- BASE_PROMPT default lives in AIEngine.lua — user can override in Settings > Advanced
-- settings.basePrompt: empty string means "use M.BASE_PROMPT default" (so plugin updates auto-apply)
-- settings.prompt contains optional user custom instructions (e.g. "Focus on architecture") — can be empty
+- The prompt is assembled by buildPrompt() in this order: [BASE_PROMPT or BASE_PROMPT_COMPACT] + [fenced CONTEXT data block with GPS/folder, if any] + [user custom instructions, if any] + [output format block]
+- Two base-prompt variants live in AIEngine.lua: BASE_PROMPT (standard) and BASE_PROMPT_COMPACT (short, for models that hallucinate under long prompts — Haiku)
+- Each model registry row has `promptProfile = "standard"` or `"compact"`. getPromptProfile(settings) resolves it at runtime; getBasePromptForSettings() respects user override
+- settings.basePrompt: empty string means "use the model's profile default" (plugin updates auto-apply)
+- settings.prompt contains optional user custom instructions (e.g. "Focus on architecture") — appended after base prompt, empty by default
+- Output-format block (count + "don't pad" + CSV hint for Ollama) is built per-run in buildPrompt since it depends on settings.maxKeywords and provider
 
 ### Keyword Style (based on stock photography best practices)
 - **Atomic keywords** — single-concept preferred; multi-word only for established terms (golden hour, copy space, fire pit) and proper nouns (New York, Baja California)
@@ -83,6 +85,9 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - **Lowercase** — default keywordCase changed to "lowercase"; proper nouns lowercased by parser
 - **Include** — subjects, setting, dominant colors, mood/emotion, composition terms (copy space, aerial view, silhouette), people descriptors (age range, gender, activity)
 - **Filler exclusion** — expanded list includes: nature, outdoor, natural, beautiful, environment, scenic, wildlife, colorful, vibrant, small, large, tiny, photo, image, picture, stock, background
+- **Named structures** — hotels, restaurants, forts, bridges, monuments, beaches, natural features are explicitly listed in BASE_PROMPT's coverage so travel-photo landmarks are a first-class keyword target
+- **Landmark handling (gas + brake)** — when confident, emit both specific and generic (e.g. "Fort Jefferson", "fort", "historic fort") so searches work at either level. When uncertain, fall back to most-specific generic ("Spanish colonial fort") rather than guessing a name
+- **Don't pad** — output-format block tells the model to return fewer than maxKeywords if it doesn't have strong candidates, rather than reaching for weak/generic filler to hit the quota
 
 ### Model Comparison (Travel Photography)
 
