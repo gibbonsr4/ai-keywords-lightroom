@@ -84,12 +84,11 @@ Recommended models, smallest to largest:
 |---|---|---|
 | Moondream 2 | ~1GB | Tiny fallback, basic keywords only |
 | Qwen3-VL 4B | ~3GB | Fastest decent tier, next-gen Qwen |
-| Qwen2.5-VL 7B | ~5GB | Battle-tested, accurate IDs |
-| Gemma 4 E4B | ~6GB | Mid-tier default, multimodal out of the box |
+| Qwen2.5-VL 7B | ~5GB | Battle-tested, accurate IDs (default) |
+| Gemma 4 E4B | ~6GB | Google's current small multimodal |
 | MiniCPM-V 4.5 8B | ~6GB | Strong detail/OCR, built on Qwen3+SigLIP2 |
 | Qwen3-VL 8B | ~6GB | Main quality tier, next-gen Qwen |
-| Gemma 4 31B | ~14GB | High-quality dense, strong all-rounder |
-| Qwen3-VL 30B MoE | ~20GB | Top-tier local, 32GB+ Apple Silicon |
+| Gemma 4 31B | ~14GB | High-quality dense, 32GB+ Apple Silicon |
 
 > **Note:** Qwen2.5-VL and Qwen3-VL models require Ollama 0.7.0 or newer. Gemma 4 and MiniCPM-V 4.5 need a recent Ollama build.
 >
@@ -116,7 +115,7 @@ Recommended models, smallest to largest:
 | Setting | Notes |
 |---|---|
 | API Key | Your Google AI API key |
-| Model | Gemini 3.1 Flash-Lite (~$0.0002/image), Gemini 3 Flash (~$0.0008/image), or Gemini 3.1 Pro (~$0.003/image) — all preview-tier as of April 2026 |
+| Model | Gemini 3.1 Flash-Lite (~$0.0002/image), Gemini 3 Flash (~$0.0008/image), Gemini 3.1 Pro (~$0.003/image) — all preview-tier — or Gemini 2.5 Pro legacy (~$0.005/image, kept for landmark recall) |
 
 ### Keyword Settings
 
