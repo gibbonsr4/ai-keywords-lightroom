@@ -1,8 +1,8 @@
 # AI Keywords — Lightroom Classic Plugin
 
-Automatically generates and applies searchable keywords to selected photos using **local Ollama vision models** or **cloud APIs** (Claude, OpenAI, Gemini). Your choice of free local processing or higher-quality cloud results.
+Generates and applies searchable keywords to selected photos using local Ollama vision models or cloud APIs (Claude, OpenAI, Gemini).
 
-**macOS only** — optimized for Apple Silicon.
+**macOS only.** Optimized for Apple Silicon.
 
 ---
 
@@ -10,190 +10,256 @@ Automatically generates and applies searchable keywords to selected photos using
 
 | Requirement | Notes |
 |---|---|
-| macOS (Apple Silicon recommended) | Uses `curl` for API calls |
 | Lightroom Classic 6+ | |
+| macOS (Apple Silicon recommended) | Uses `curl`; no Windows support yet |
 
-**For Ollama (local):**
-- [Ollama](https://ollama.com) installed and running
-- A vision model (install from within Settings or via `ollama pull <model>`)
+Plus one or more of:
 
-**For cloud providers (any or all):**
-- **Claude API:** An Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
-- **OpenAI:** An API key from [platform.openai.com](https://platform.openai.com)
-- **Gemini:** A Google AI API key from [aistudio.google.com](https://aistudio.google.com)
+- **Ollama** (local, free) — requires ~2–15 GB disk per model and enough RAM to run it
+- **Anthropic Claude API key** — from [console.anthropic.com](https://console.anthropic.com)
+- **OpenAI API key** — from [platform.openai.com](https://platform.openai.com)
+- **Google AI (Gemini) API key** — from [aistudio.google.com](https://aistudio.google.com)
 
-### Supported File Types
-JPEG, PNG, TIFF, WEBP, HEIC/HEIF, and all RAW formats supported by Lightroom (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, PEF, SRW).
+### Supported file types
 
-Images are rendered via Lightroom's own export pipeline, so any format Lightroom can open will work.
+JPEG, PNG, TIFF, WEBP, HEIC/HEIF, and every RAW format Lightroom can open (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, PEF, SRW). Images are rendered through Lightroom's export pipeline, so if LR can open it, the plugin can keyword it.
 
 ---
 
-## Installation
+## Install the plugin
 
-1. Place the `AIKeywords.lrplugin` folder somewhere permanent (e.g. `~/Documents/LR Plugins/`)
-2. In Lightroom Classic: **File → Plug-in Manager → Add**
-3. Navigate to and select the `AIKeywords.lrplugin` folder
-4. Click **Done**
+1. Download or clone this repo. Place the `AIKeywords.lrplugin` folder somewhere permanent (e.g. `~/Documents/Lightroom Plugins/`). Don't leave it in Downloads.
+2. In Lightroom Classic: **File → Plug-in Manager → Add**.
+3. Select the `AIKeywords.lrplugin` folder. Click **Done**.
+
+The plugin adds three entries under **Library → Plug-in Extras**:
+
+- **Generate AI Keywords — Selected Photos**
+- **Compare Models — Selected Photo**
+- **Settings…**
+
+---
+
+## First-run setup
+
+Pick one path below. You can add others later.
+
+### Path A — Ollama (local, free)
+
+Best for privacy, large batches, no per-image cost. Slower than cloud (~5–20 s/image).
+
+1. **Install Ollama.** Download from [ollama.com/download](https://ollama.com/download) and run the installer. It installs as a menu-bar app.
+2. **Start Ollama.** Either open the Ollama app or, from the plugin's Settings (Library → Plug-in Extras → Settings…) click **Start Ollama**.
+3. **Pick and install a model.** In Settings, on the **Ollama** tab, choose a model from the dropdown and click **Install Model**. Terminal opens and runs `ollama pull <model>` so you can watch progress.
+
+Good first pick for 16 GB Macs: **Qwen2.5-VL 7B** (~5 GB, the default). For 8 GB Macs, use **Qwen3-VL 4B** (~3 GB). See the [model table](#ollama-models) below.
+
+4. **Select a few photos** in the Library grid.
+5. **Library → Plug-in Extras → Generate AI Keywords — Selected Photos.** Wait for the progress bar. Keywords appear in the Keywording panel.
+
+If Ollama seems slow, check its menu-bar app for an **MLX backend** option — it's significantly faster on Apple Silicon once enabled.
+
+### Path B — Cloud API (Claude / OpenAI / Gemini)
+
+Best for accuracy and speed (~2–5 s/image). Costs fractions of a cent per image.
+
+1. **Get an API key** from one of:
+   - **Anthropic:** [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key. Needs a small credit balance (~$5 is plenty for thousands of images).
+   - **OpenAI:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys) → Create new secret key.
+   - **Google AI Studio:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → Create API Key.
+2. **Open Settings** (Library → Plug-in Extras → Settings…) and switch to the provider's tab.
+3. **Paste your API key** into the field. Pick a model from the dropdown. Save.
+
+API keys are stored in the macOS Keychain, not in plaintext preferences.
+
+Default models on fresh install: Claude Sonnet 4.6, OpenAI GPT-5.4 Mini, Gemini 3.1 Pro.
+
+4. **Select photos**, run **Generate AI Keywords**. Keywords arrive in a few seconds.
 
 ---
 
 ## Usage
 
-1. Open Settings and choose your provider (Ollama, Claude, OpenAI, or Gemini)
-2. In Lightroom Library, select one or more photos
-3. **Library → Plug-in Extras → Generate AI Keywords — Selected Photos**
-4. Wait for the progress bar to complete
-5. Keywords appear in the **Keywording** panel
+### Generate keywords
 
-### Compare Models
+1. Select one or more photos in the Library grid.
+2. **Library → Plug-in Extras → Generate AI Keywords — Selected Photos.**
+3. Keywords land in the Keywording panel as each photo finishes.
 
-Want to find the best model for your photos? Use the comparison tool:
+Supports cancellation (click the × on the progress bar) and resume (re-run on the same selection with **Skip keyworded** enabled in Settings).
 
-1. Select **one** photo in the Library
-2. **Library → Plug-in Extras → Compare Models — Selected Photo**
-3. Check 2–5 models to compare (Ollama, Claude, OpenAI, and/or Gemini models)
-4. Optionally override the prompt for this comparison
-5. View side-by-side results with timing, keyword counts, and overlap analysis
+### Compare models
 
-No keywords are saved — this is a preview-only tool for evaluating model quality and testing prompts.
+Side-by-side keyword output from up to 5 models on a single photo. No keywords are saved to the catalog — it's a preview-only tool.
+
+1. Select **one** photo.
+2. **Library → Plug-in Extras → Compare Models — Selected Photo.**
+3. Check 2–5 models (Ollama, Claude, OpenAI, Gemini). Click **Compare**.
+4. Results show keywords per model, timing, per-image cost estimate, and overlap analysis.
+
+Each model uses its production prompt — Haiku gets a shorter variant, everything else gets the standard prompt. A custom prompt set in Settings wins for all selected models.
 
 ---
 
 ## Configuration
 
-Open **Library → Plug-in Extras → Settings…** to configure. The Save button is disabled until all required fields are valid.
+Open **Library → Plug-in Extras → Settings…** The **Save** button stays disabled until required fields are valid.
 
-### Provider
+### Provider tabs
 
-Choose between **Ollama (local)**, **Claude API**, **OpenAI**, and **Gemini** via tabs.
+Switch between **Ollama**, **Claude**, **OpenAI**, **Gemini** via the tabs at the top. Each provider has its own model and API-key settings, but **only one provider is active at a time** — the one on the currently-selected tab.
 
-### Ollama Settings
+### Ollama settings
 
-The plugin checks Ollama's status when you open Settings and shows whether it's installed, running, and which models are available. You can:
-
-- **Start Ollama** directly from Settings (or open the download page if not installed)
-- **Choose a model** from the dropdown with install status indicators (✓ = installed)
-- **Install models** by clicking "Install Model" (opens Terminal so you can watch `ollama pull` progress)
+- **Status:** shows whether Ollama is installed and running, plus its version. Clickable button: Download / Start / Refresh depending on state.
+- **URL:** defaults to `http://localhost:11434` (standard Ollama). Change only if you run Ollama on another host.
+- **Model:** dropdown of recommended models with install indicators. Installed models show ✓; others show "not installed."
+- **Install Model / Uninstall Model:** Install opens Terminal so you can watch `ollama pull` progress. Uninstall runs `ollama rm` silently.
+- **Check for New Models:** fetches the latest recommended list from GitHub — no plugin update needed when the Ollama landscape shifts.
 
 <a id="ollama-models"></a>
 
-Recommended models, smallest to largest:
+#### Recommended Ollama models
 
-| Model | RAM | Best For |
+| Model | RAM | Best for |
 |---|---|---|
-| Moondream 2 | ~1GB | Tiny fallback, basic keywords only |
-| Qwen3-VL 4B | ~3GB | Fastest decent tier, next-gen Qwen |
-| Qwen2.5-VL 7B | ~5GB | Battle-tested, accurate IDs (default) |
-| Gemma 4 E4B | ~6GB | Google's current small multimodal |
-| MiniCPM-V 4.5 8B | ~6GB | Strong detail/OCR, built on Qwen3+SigLIP2 |
-| Qwen3-VL 8B | ~6GB | Main quality tier, next-gen Qwen |
-| Gemma 4 31B | ~14GB | High-quality dense, 32GB+ Apple Silicon |
+| Moondream 2 | ~1 GB | Tiny fallback for constrained Macs; basic keywords only |
+| Qwen3-VL 4B | ~3 GB | Fastest decent tier; good for 8 GB Macs |
+| Qwen2.5-VL 7B | ~5 GB | Battle-tested default; accurate species/object IDs |
+| Gemma 4 E4B | ~6 GB | Google's current small multimodal |
+| MiniCPM-V 4.5 8B | ~6 GB | Strong detail and OCR (built on Qwen3 + SigLIP2) |
+| Qwen3-VL 8B | ~6 GB | Newer Qwen generation; main quality tier |
+| Gemma 4 31B | ~14 GB | High-quality dense; 32 GB+ Macs |
 
-> **Note:** Qwen2.5-VL and Qwen3-VL models require Ollama 0.7.0 or newer. Gemma 4 and MiniCPM-V 4.5 need a recent Ollama build.
->
-> Ollama's MLX backend (preview) gives Apple Silicon a significant speedup — enable it in Ollama's settings if available.
->
-> Click the **Check for New Models** button in Settings to pull the latest recommended list from GitHub — no plugin update needed. You can also uninstall models directly from Settings to free disk space.
+Qwen2.5-VL and Qwen3-VL models require **Ollama 0.7+**. Gemma 4 and MiniCPM-V 4.5 need a recent Ollama build.
 
-### Claude API Settings
+### Claude settings
 
-| Setting | Notes |
-|---|---|
-| API Key | Your Anthropic API key |
-| Model | Haiku 4.5 (~$0.002/image), Sonnet 4.6 (~$0.007/image), or Opus 4.7 (~$0.025/image) |
+| Model | ~Cost/image | Notes |
+|---|---|---|
+| Claude Haiku 4.5 | $0.002 | Cheap tier; uses a shorter compact prompt. Can over-commit to wrong specifics on unusual architecture. |
+| **Claude Sonnet 4.6** | $0.007 | **Default.** Balanced — strong reasoning, conservative on specific names, clean generics. |
+| Claude Opus 4.7 | $0.025 | Highest accuracy; worth it for landmark-heavy runs. |
 
-### OpenAI Settings
+### OpenAI settings
 
-| Setting | Notes |
-|---|---|
-| API Key | Your OpenAI API key |
-| Model | GPT-5.4 Nano (~$0.0003/image), GPT-5.4 Mini (~$0.001/image), or GPT-5.4 (~$0.007/image) |
+| Model | ~Cost/image | Notes |
+|---|---|---|
+| GPT-5.4 Nano | $0.0003 | Ultra-cheap batch/bulk tier. |
+| **GPT-5.4 Mini** | $0.001 | **Default.** Sweet spot for single-image keyword extraction. |
+| GPT-5.4 | $0.007 | Flagship — use for hard cases. |
 
-### Gemini Settings
+### Gemini settings
 
-| Setting | Notes |
-|---|---|
-| API Key | Your Google AI API key |
-| Model | Gemini 3.1 Flash-Lite (~$0.0002/image), Gemini 3 Flash (~$0.0008/image), Gemini 3.1 Pro (~$0.003/image) — all preview-tier — or Gemini 2.5 Pro legacy (~$0.005/image, kept for landmark recall) |
+| Model | ~Cost/image | Notes |
+|---|---|---|
+| Gemini 3.1 Flash-Lite | $0.0002 | Cheapest cloud option anywhere. Clean generics; rarely names specific landmarks. |
+| Gemini 3 Flash | $0.0008 | Cheap + fast; comparable quality to Flash-Lite. |
+| **Gemini 3.1 Pro** | $0.003 | **Default.** Strongest at naming specific landmarks/resorts/parks. |
+| Gemini 2.5 Pro (legacy) | $0.005 | Kept as a fallback — still recognizes some specific properties the 3.x preview series misses. Google is phasing 2.5 out; may disappear without notice. |
 
-### Keyword Settings
+All Gemini 3 IDs are currently preview-tier (as of April 2026).
+
+### Keyword settings
 
 | Setting | Default | Notes |
 |---|---|---|
-| Max keywords | 20 | Per photo, 1–50. Also communicated to the model in the prompt. |
-| Keyword case | lowercase | Options: As returned, lowercase, Title Case |
-| Timeout | 90 seconds | Per image |
-| Parent keyword | (blank) | See below |
-| Skip keyworded | Off | Skip photos that already have keywords |
+| Max keywords | 20 | 1–50 per photo. The model is told to return fewer if it doesn't have strong candidates, rather than pad with filler. |
+| Keyword case | lowercase | Also: "As returned" or Title Case. |
+| Timeout | 90 s | Per image. |
+| Parent keyword | (blank) | Nests AI-generated keywords under a single parent. See below. |
+| Skip keyworded | Off | Skip photos that already have keywords — useful for resuming interrupted runs. |
 
-### Parent Keyword (Keyword Hierarchy)
+### Parent keyword (keyword hierarchy)
 
-By default, keywords are created at the root level of your catalog's keyword list (flat). If you enter a parent keyword (e.g. "AI Generated"), all AI-created keywords will be nested under that parent in the Keyword List panel.
+Leave blank for flat keywords at the root of your catalog. Set to something like `AI Generated` to nest every AI-added keyword under that parent.
 
-This is useful for:
-- Seeing at a glance which keywords came from AI vs manual tagging
-- Collapsing the AI keyword tree in the Keyword List panel
-- Bulk-selecting and deleting AI keywords if needed
+Useful for:
 
-The parent keyword itself is set to `includeOnExport = false`, so it won't appear in exported photo metadata — only the child keywords will.
+- Distinguishing AI-added keywords from manual tagging at a glance
+- Collapsing the AI subtree in the Keyword List panel
+- Bulk-selecting and deleting all AI keywords
 
-> **Note:** If a keyword with the same name already exists at the root level (from a previous run without a parent), the plugin may create a second keyword with the same name under the parent. This is a Lightroom SDK limitation. To avoid duplicates, delete root-level AI keywords before switching to a parent keyword.
+The parent itself is set to `includeOnExport = false`, so it won't appear in exported metadata — only its children will.
 
-### Context & Instructions
+**Limitation:** if a keyword of the same name already exists at the root of your catalog (from a previous run without a parent), Lightroom's SDK won't move it — you may end up with duplicates. The plugin tries to minimize this by looking up children first, but the safest option if you're switching modes is to delete any stranded root-level AI keywords before your next run.
 
-- **GPS coordinates:** When enabled (default), GPS coordinates from photo EXIF are sent to the model for location-aware keywording. Disable for privacy.
-- **Folder context:** When enabled, catalog folder names (e.g. `Dominican Republic > Santo Domingo`) are passed to the model as location hints. Generic folder names like "Photos" and "Imports" are filtered out.
-- **Folder aliases:** Expand short folder names (e.g. `DR=Dominican Republic; CR=Costa Rica`).
-- **Custom instructions:** Optional additional prompt instructions for domain-specific guidance (e.g. "Focus on architecture and design elements"). The built-in base prompt handles keyword style automatically.
+### Context & instructions
+
+- **Use GPS coordinates from photo metadata:** passes EXIF GPS to the model for location-aware keywords. Disable for privacy. GPS values are *never* written to logs — only a "sent" flag.
+- **Use catalog folder names as location hints:** treats your folder structure as soft location context (e.g. a photo in `Dominican Republic > Santo Domingo` gets that hint). Generic names like `Photos` and `Imports` are filtered out.
+- **Folder aliases:** expand short folder names, e.g. `DR=Dominican Republic; CR=Costa Rica`. Accepts `;`, `,`, or newlines between entries.
+- **Custom instructions:** optional extra prompt guidance (e.g. "Focus on architecture and design elements"). The built-in base prompt handles keyword style — you don't need to re-specify it here.
+- **Timeout:** in seconds per image. Raise if you're on a slow Ollama model and seeing timeouts.
+
+### Logging
+
+Enable to write a timestamped `AI_Keywords_<date>.log` file per run. Log folder defaults to `~/Documents`.
+
+Logs include provider, model, settings, the base prompt (once), per-image keywords / errors / timing, and the first 500 characters of each raw model response.
+
+**GPS coordinates are redacted** — logs record only that GPS was included, not the actual values.
+
+### Advanced — base prompt
+
+Most users should ignore this. The built-in prompt handles keyword style, coverage, and landmark handling. Override only if you want a fundamentally different behavior. Empty means "use the plugin default," which automatically picks the right variant for the selected model (compact for Haiku, standard for everything else).
 
 ---
 
-## Choosing a Provider
+## Choosing a provider
 
-| | Ollama | Claude | OpenAI | Gemini |
+|   | Ollama | Claude | OpenAI | Gemini |
 |---|---|---|---|---|
-| Cost | Free | $0.002–0.025/image | $0.0003–0.007/image | $0.0002–0.003/image |
-| Speed | 4–20s (Apple Silicon) | ~2s | ~2s | ~2s |
-| Quality | Good general keywords | Excellent, best landmark ID | Very good | Very good |
-| Privacy | Local, nothing leaves your machine | Cloud | Cloud | Cloud |
+| Cost | Free | $0.002–0.025 | $0.0003–0.007 | $0.0002–0.005 |
+| Speed | 5–20 s | ~2 s | ~2 s | ~2 s |
+| Privacy | Local | Cloud | Cloud | Cloud |
+| Strength | General keywords | Conservative accuracy, strong reasoning | Balanced | Strongest at naming specific landmarks |
 
-**Recommendation:** Ollama for casual tagging and privacy. Claude Sonnet 4.6 or Opus 4.7 for accuracy-critical runs. Gemini 3.1 Flash-Lite (preview) for cheapest cloud option. Use Compare Models to test which works best for your photos.
+**Quick picks:**
 
----
+- Casual tagging, privacy-sensitive: **Ollama** with Qwen2.5-VL 7B.
+- Best per-photo accuracy, don't care about cost: **Claude Sonnet 4.6** or **Opus 4.7**.
+- Best named-landmark recognition: **Gemini 3.1 Pro** (or Gemini 2.5 Pro as fallback).
+- Cheapest cloud, bulk runs: **Gemini 3.1 Flash-Lite** or **GPT-5.4 Nano**.
 
-## Logging
-
-Enable logging in Settings to get a timestamped log file for each run. Logs are written incrementally (crash-safe) and include:
-
-- Provider, model, and settings used
-- Base prompt (once per run)
-- Per-image results (keywords, errors, skips)
-- Raw model response (first 500 chars)
-- Per-image timing
-
-GPS coordinates are intentionally **redacted** from logs — when GPS context is enabled, the log records only that coordinates were sent to the model, not the actual values. Logs persist on disk and are occasionally shared for support, so redaction avoids leaking exact locations.
-
-Log files are saved to the configured folder (default: `~/Documents`).
+Use **Compare Models** to see how 2–5 models handle the same photo side-by-side before committing.
 
 ---
 
-## Performance
+## Performance notes
 
-- **Ollama:** ~4–20 seconds per image depending on model and hardware
-- **Cloud providers:** ~2–5 seconds per image
-- Keywords are written incrementally — safe to cancel and resume
-- "Skip keyworded" avoids re-processing already-tagged photos
-
-> **Note:** Lightroom's UI may be briefly unresponsive while each image is being processed. This is a limitation of the Lightroom SDK — there is no non-blocking shell execution available. The progress bar updates between images and you can cancel at any time.
+- **Ollama:** 5–20 s/image depending on model size and your Mac's RAM / chip.
+- **Cloud providers:** 2–5 s/image including network.
+- Keywords are written incrementally — cancelling mid-run keeps whatever finished.
+- **Skip keyworded** in Settings avoids re-processing already-tagged photos (useful for resuming).
+- Lightroom's UI may briefly unresponsive while each image is processed — this is an LR SDK limitation (no non-blocking shell exec). The progress bar updates between photos; Cancel is always available.
 
 ---
 
 ## Troubleshooting
 
-**Ollama: Timeout / curl exit 28** → Increase timeout in Settings.
-**Ollama: "Could not connect"** → Start Ollama from Settings or run `ollama serve` in Terminal.
-**Claude: "API error"** → Check your API key and account balance at console.anthropic.com.
-**OpenAI: "API error"** → Check your API key at platform.openai.com.
-**Gemini: "API error"** → Check your API key at aistudio.google.com.
-**Keywords not appearing under parent** → See note above about existing root-level keywords.
+| Symptom | Fix |
+|---|---|
+| Ollama: "Could not connect" | Ollama isn't running. Click **Start Ollama** in Settings, or run `ollama serve` in Terminal. |
+| Ollama: timeout / curl exit 28 | Raise the Timeout in Settings. Large images or small Macs can need 120–180 s. Consider a smaller model. |
+| Ollama: model shows "not installed" | Click **Install Model**. Terminal opens and runs `ollama pull`. |
+| Claude / OpenAI / Gemini: "HTTP 401" | Invalid or revoked API key. Regenerate at the provider's console and paste into Settings. |
+| Claude / OpenAI / Gemini: "HTTP 429" | Rate limited. Wait a minute and retry. |
+| Gemini: "model not found" | Google rotated a preview ID. Open Settings, pick a different Gemini model. Gemini 2.5 Pro legacy is stable; 3.x are preview-tier. |
+| Keywords not under parent | Lightroom SDK limitation with pre-existing root-level keywords of the same name. Delete root-level AI keywords before switching to a parent. |
+| Plugin UI feels frozen mid-run | Normal — see Performance notes above. Progress updates between images. |
+
+---
+
+## Privacy
+
+- **Ollama:** nothing leaves your Mac.
+- **Cloud providers:** the rendered JPEG (scaled to 1568 px long edge, stripped of face/location EXIF), the prompt text, and any GPS coordinates/folder hints you've enabled are sent to the provider. Keywords come back, and that's it.
+- **API keys:** stored in the macOS Keychain.
+- **Logs:** opt-in. GPS values redacted.
+
+---
+
+## License
+
+See LICENSE. MIT.
