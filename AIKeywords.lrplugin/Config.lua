@@ -343,8 +343,30 @@ LrTasks.startAsyncTask(function()
                             title   = LrView.bind("ollamaActionTitle"),
                             action  = function()
                                 LrTasks.startAsyncTask(function()
+                                    -- Refresh first so the action is driven by
+                                    -- current reality, not a label that was set
+                                    -- when Settings opened. Without this, clicking
+                                    -- "Download Ollama" after the user installed
+                                    -- Ollama outside the plugin would still try to
+                                    -- open the download page.
+                                    refreshOllamaState()
+
                                     if not isOllamaInstalled() then
                                         LrTasks.execute('open "https://ollama.com/download"')
+                                        props.ollamaStatus = "Opened download page — waiting for Ollama install…"
+                                        -- Poll every 2s for up to ~3 min so the
+                                        -- button label self-updates once the user
+                                        -- finishes installing. Close Settings to
+                                        -- cancel (LR tears down the async task).
+                                        for _ = 1, 90 do
+                                            LrTasks.sleep(2)
+                                            if isOllamaInstalled() then break end
+                                        end
+                                        refreshOllamaState()
+                                        if not isOllamaInstalled() then
+                                            props.ollamaStatus =
+                                                "Ollama install not detected. Click Download Ollama again once installed, or reopen Settings."
+                                        end
                                     elseif not props._ollamaRunning then
                                         LrTasks.execute('open -a Ollama')
                                         props.ollamaStatus = "Starting Ollama…"
@@ -354,8 +376,10 @@ LrTasks.startAsyncTask(function()
                                             local ver = getOllamaVersion(props.ollamaUrl)
                                             if ver then break end
                                         end
+                                        refreshOllamaState()
+                                    else
+                                        refreshOllamaState()
                                     end
-                                    refreshOllamaState()
                                 end)
                             end,
                         },
