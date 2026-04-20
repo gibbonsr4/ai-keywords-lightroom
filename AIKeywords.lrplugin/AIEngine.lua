@@ -97,11 +97,10 @@ M.VISION_MODELS = {
     { value = "moondream",               label = "Moondream 2",      info = "~1GB RAM  |  Tiny fallback, basic keywords only",                           promptProfile = "compact"  },
     { value = "qwen3-vl:4b",             label = "Qwen3-VL 4B",      info = "~3GB RAM  |  Fastest decent tier, next-gen Qwen  |  Requires Ollama 0.7+",  promptProfile = "standard" },
     { value = "qwen2.5vl:7b",            label = "Qwen2.5-VL 7B",    info = "~5GB RAM  |  Battle-tested, accurate IDs  |  Requires Ollama 0.7+",        promptProfile = "standard" },
-    { value = "gemma4:e4b",              label = "Gemma 4 E4B",      info = "~6GB RAM  |  Mid-tier default, multimodal out of the box",                 promptProfile = "standard" },
+    { value = "gemma4:e4b",              label = "Gemma 4 E4B",      info = "~6GB RAM  |  Google's current small multimodal",                            promptProfile = "standard" },
     { value = "openbmb/minicpm-v4.5:8b", label = "MiniCPM-V 4.5 8B", info = "~6GB RAM  |  Strong detail/OCR, built on Qwen3+SigLIP2",                    promptProfile = "standard" },
     { value = "qwen3-vl:8b",             label = "Qwen3-VL 8B",      info = "~6GB RAM  |  Main quality tier, next-gen Qwen  |  Requires Ollama 0.7+",   promptProfile = "standard" },
     { value = "gemma4:31b",              label = "Gemma 4 31B",      info = "~14GB RAM  |  High-quality dense, strong all-rounder",                     promptProfile = "standard" },
-    { value = "qwen3-vl:30b-a3b",        label = "Qwen3-VL 30B MoE", info = "~20GB RAM  |  MoE top-tier, 32GB+ Apple Silicon  |  Requires Ollama 0.7+", promptProfile = "standard" },
 }
 
 -- ── Cloud provider models ───────────────────────────────────────────────
@@ -124,17 +123,16 @@ M.OPENAI_MODELS = {
 -- Gemini 3 model IDs use dots for version numbers and a "-preview" suffix.
 -- These are the current IDs as of April 2026; "gemini-3-pro-preview" was
 -- shut down 2026-03-09 in favour of the 3.1 variant.
--- Gemini 2.5 models are kept at the bottom for landmark-ID testing — their
--- training data recognizes some specific properties (resorts, smaller
--- landmarks) that Gemini 3 preview does not. Being phased out by Google;
--- may be deprecated without warning.
+-- Gemini 2.5 Pro is kept as a legacy entry — it correctly IDs specific
+-- resorts/landmarks the 3.x preview series doesn't always surface. 2.5
+-- Flash and 2.5 Flash-Lite were dropped after QA showed them either
+-- generic-only or emitting confident wrong specifics; 3.x supersedes them
+-- at the same price points.
 M.GEMINI_MODELS = {
-    { value = "gemini-3.1-flash-lite-preview", label = "Gemini 3.1 Flash-Lite",          cost = "~$0.0002", promptProfile = "standard" },
-    { value = "gemini-3-flash-preview",        label = "Gemini 3 Flash",                 cost = "~$0.0008", promptProfile = "standard" },
-    { value = "gemini-3.1-pro-preview",        label = "Gemini 3.1 Pro",                 cost = "~$0.003",  promptProfile = "standard" },
-    { value = "gemini-2.5-flash-lite",         label = "Gemini 2.5 Flash-Lite (legacy)", cost = "~$0.0003", promptProfile = "standard" },
-    { value = "gemini-2.5-flash",              label = "Gemini 2.5 Flash (legacy)",      cost = "~$0.001",  promptProfile = "standard" },
-    { value = "gemini-2.5-pro",                label = "Gemini 2.5 Pro (legacy)",        cost = "~$0.005",  promptProfile = "standard" },
+    { value = "gemini-3.1-flash-lite-preview", label = "Gemini 3.1 Flash-Lite",   cost = "~$0.0002", promptProfile = "standard" },
+    { value = "gemini-3-flash-preview",        label = "Gemini 3 Flash",          cost = "~$0.0008", promptProfile = "standard" },
+    { value = "gemini-3.1-pro-preview",        label = "Gemini 3.1 Pro",          cost = "~$0.003",  promptProfile = "standard" },
+    { value = "gemini-2.5-pro",                label = "Gemini 2.5 Pro (legacy)", cost = "~$0.005",  promptProfile = "standard" },
 }
 
 -- ── Remote model list URL (opt-in refresh via Settings) ──────────────
