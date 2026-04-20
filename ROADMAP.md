@@ -15,4 +15,10 @@ Detailed task breakdowns and progress are tracked in [GitHub Issues](https://git
 
 | Feature | Issue | Shipped in | Summary |
 |---|---|---|---|
+| April 2026 model refresh | — | 1.2.0 | Gemini 3 family (Flash-Lite, Flash, Pro), Claude Opus 4.7, GPT-5.4 Nano/Mini, Gemma 4 (E4B, 31B), Qwen3-VL (4B, 8B), MiniCPM-V 4.5 |
+| Prompt rewrite for landmark/species ID | — | 1.2.0 | Post-CONTEXT landmark directive with soft hedge; compact prompt profile for Haiku; base prompts restructured for prioritization and coverage |
+| Provider code deduplication | — | 1.2.0 | `M.queryAPI(spec)` shared transport for all providers; HTTP status capture; temp-file hygiene |
+| Compare Models UX | — | 1.2.0 | Per-image cost estimates, photo thumbnail, wrapping results layout, phase-aware progress caption |
+| Parent-keyword stranding fix | — | 1.2.0 | `findOrCreateUnderParent` looks up children first, no more duplicated-at-root keywords |
+| Security hardening | — | 1.2.0 | curl config URL escaping, strict Ollama healthcheck, prompt-injection fencing for folder/GPS metadata, GPS redacted from logs |
 | Encrypted API keys | [#1](https://github.com/gibbonsr4/ai-keywords-lightroom/issues/1) | 1.1.0 | API keys stored in the macOS Keychain via LrPasswords, with auto-migration from the pre-1.1 plaintext pref on first read |
