@@ -86,8 +86,9 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - **Lowercase** — default keywordCase changed to "lowercase"; proper nouns lowercased by parser
 - **Include** — subjects, setting, dominant colors, mood/emotion, composition terms (copy space, aerial view, silhouette), people descriptors (age range, gender, activity)
 - **Filler exclusion** — expanded list includes: nature, outdoor, natural, beautiful, environment, scenic, wildlife, colorful, vibrant, small, large, tiny, photo, image, picture, stock, background
-- **Named structures** — hotels, restaurants, forts, bridges, monuments, beaches, natural features are explicitly listed in BASE_PROMPT's coverage so travel-photo landmarks are a first-class keyword target
-- **Landmark handling (gas + brake)** — when confident, emit both specific and generic (e.g. "Fort Jefferson", "fort", "historic fort") so searches work at either level. When uncertain, fall back to most-specific generic ("Spanish colonial fort") rather than guessing a name
+- **Named structures** — BASE_PROMPT's coverage line mentions "named structures or features when recognizable" so travel-photo landmarks are a first-class keyword target without burning tokens on a taxonomy list
+- **Landmark directive lives at the TAIL of BASE_PROMPT** — LLM recency weighting matters here. Earlier rewrites put the landmark paragraph mid-prompt with three layers of anti-risk caveats and observed regression in specific-name ID (pushed models toward safe generics). Current design: one closing paragraph — "use all available evidence to identify the most specific place, landmark, hotel, resort, park, or named feature you can confidently support; if uncertain of a name, prefer omission over guessing"
+- **Single safety rule for landmarks** — "prefer omission over guessing" replaces the earlier stack ("wrong specifics worse than correct generics" + "only emit what image shows" + context-block "never invent from metadata"). Same intent, less fear-inducing, model doesn't over-correct into generics
 - **Don't pad** — output-format block tells the model to return fewer than maxKeywords if it doesn't have strong candidates, rather than reaching for weak/generic filler to hit the quota
 
 ### Model Comparison (Travel Photography)
