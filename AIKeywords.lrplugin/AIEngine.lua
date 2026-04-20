@@ -529,8 +529,8 @@ M.BASE_PROMPT =
     "colorful, vibrant, small, large, tiny, photo, image, picture, stock, background.\n\n" ..
 
     "Use all available evidence — visual cues in the image plus any CONTEXT block below — " ..
-    "to identify the most specific place, landmark, hotel, resort, park, or named feature you " ..
-    "can confidently support. If uncertain of a name, prefer omission over guessing."
+    "to determine the location, then identify specific places, landmarks, hotels, resorts, parks, " ..
+    "or named features consistent with that location."
 
 -- Compact variant for models that hallucinate under long prompts (Haiku).
 -- Same tail-directive shape as BASE_PROMPT, with grammar/atomicity/synonym
@@ -548,9 +548,9 @@ M.BASE_PROMPT_COMPACT =
     "Avoid generic filler: nature, outdoor, natural, beautiful, environment, scenic, wildlife, " ..
     "colorful, vibrant, photo, image, picture, stock, background.\n\n" ..
 
-    "Use all available evidence — visual cues plus any CONTEXT block below — to identify the " ..
-    "most specific place, landmark, hotel, resort, park, or feature you can confidently support. " ..
-    "If uncertain of a name, prefer omission over guessing."
+    "Use all available evidence — visual cues plus any CONTEXT block below — to determine the " ..
+    "location, then identify specific places, landmarks, hotels, resorts, parks, or named " ..
+    "features consistent with that location."
 
 -- Registry: named prompt variants, looked up by the model's promptProfile.
 M.PROMPT_PROFILES = {
