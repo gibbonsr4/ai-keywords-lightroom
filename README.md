@@ -128,7 +128,7 @@ Switch between **Ollama**, **Claude**, **OpenAI**, **Gemini** via the tabs at th
 | Qwen2.5-VL 7B | ~5 GB | Battle-tested default; accurate species/object IDs |
 | Gemma 4 E4B | ~6 GB | Google's current small multimodal |
 | MiniCPM-V 4.5 8B | ~6 GB | Strong detail and OCR (built on Qwen3 + SigLIP2) |
-| Qwen3-VL 8B | ~6 GB | Newer Qwen generation; main quality tier |
+| Qwen3-VL 8B | ~6 GB | Newer Qwen generation. Currently slower than its size suggests on Ollama (Metal kernels not yet tuned) — prefer Qwen2.5-VL 7B until fixed. |
 | Gemma 4 31B | ~14 GB | High-quality dense; 32 GB+ Macs |
 
 Qwen2.5-VL and Qwen3-VL models require **Ollama 0.7+**. Gemma 4 and MiniCPM-V 4.5 need a recent Ollama build.
@@ -211,9 +211,9 @@ Most users should ignore this. The built-in prompt handles keyword style, covera
 |   | Ollama | Claude | OpenAI | Gemini |
 |---|---|---|---|---|
 | Cost | Free | $0.002–0.025 | $0.0003–0.007 | $0.0002–0.005 |
-| Speed | 5–20 s | ~2 s | ~2 s | ~2 s |
+| Speed | 15–60 s (see Performance) | ~2 s | ~2 s | ~2 s |
 | Privacy | Local | Cloud | Cloud | Cloud |
-| Strength | General keywords | Conservative accuracy, strong reasoning | Balanced | Strongest at naming specific landmarks |
+| Strength | General keywords, free batch processing | Conservative accuracy, strong reasoning | Balanced | Strongest at naming specific landmarks |
 
 **Quick picks:**
 
@@ -228,11 +228,35 @@ Use **Compare Models** to see how 2–5 models handle the same photo side-by-sid
 
 ## Performance notes
 
-- **Ollama:** 5–20 s/image depending on model size and your Mac's RAM / chip.
-- **Cloud providers:** 2–5 s/image including network.
+**Cloud providers:** 2–5 s/image including network. Consistent across Claude, OpenAI, and Gemini.
+
+**Ollama:** varies widely by model, Mac, and which Ollama build you're on. Rough expectations on recent Apple Silicon with 16–24 GB RAM:
+
+| Model | Typical per-image |
+|---|---|
+| Moondream 2 | 3–8 s |
+| Qwen3-VL 4B | 8–20 s |
+| Qwen2.5-VL 7B (default) | 15–30 s |
+| MiniCPM-V 4.5 8B | 20–40 s |
+| Gemma 4 E4B | 25–45 s |
+| Qwen3-VL 8B | **60–180 s currently** — see note |
+| Gemma 4 31B | 60–120 s (32 GB+) |
+
+**Qwen3-VL 8B is currently much slower than its size suggests** (we've seen 180+ s per image on an M5 MacBook Pro / 24 GB). This appears to be an Ollama runtime optimization gap for the Qwen3-VL architecture — same pattern that happened with Qwen2.5-VL when it first shipped. It will likely improve with future Ollama releases. Until then, **use Qwen2.5-VL 7B or Qwen3-VL 4B** for predictable performance.
+
+Other factors that affect Ollama speed:
+
+- **First-run compilation.** The first keyword request after starting Ollama (or after loading a new model) can add 30–60 s of one-time JIT compilation. Subsequent runs are faster.
+- **CPU spill.** If Ollama's memory estimator is conservative, parts of the model may run on CPU instead of Metal. Watch Activity Monitor: if CPU is pegged and GPU isn't, that's the issue. Closing other apps sometimes helps.
+- **MLX backend (preview).** Ollama's MLX preview for Apple Silicon is significantly faster when available. Check your Ollama menu-bar settings.
+
+**If you hit timeouts:** raise the per-image Timeout in Settings (default 90 s; 180–300 s is reasonable for larger Ollama models) or pick a smaller model.
+
+### Other performance notes
+
 - Keywords are written incrementally — cancelling mid-run keeps whatever finished.
 - **Skip keyworded** in Settings avoids re-processing already-tagged photos (useful for resuming).
-- Lightroom's UI may briefly unresponsive while each image is processed — this is an LR SDK limitation (no non-blocking shell exec). The progress bar updates between photos; Cancel is always available.
+- Lightroom's UI may briefly feel unresponsive while each image is processed — LR SDK limitation (no non-blocking shell exec). The progress bar updates between photos; Cancel is always available.
 
 ---
 

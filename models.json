@@ -7,7 +7,7 @@
     { "value": "qwen2.5vl:7b",            "label": "Qwen2.5-VL 7B",    "info": "~5GB RAM  |  Battle-tested, accurate IDs  |  Requires Ollama 0.7+",       "promptProfile": "standard" },
     { "value": "gemma4:e4b",              "label": "Gemma 4 E4B",      "info": "~6GB RAM  |  Google's current small multimodal",                           "promptProfile": "standard" },
     { "value": "openbmb/minicpm-v4.5:8b", "label": "MiniCPM-V 4.5 8B", "info": "~6GB RAM  |  Strong detail/OCR, built on Qwen3+SigLIP2",                   "promptProfile": "standard" },
-    { "value": "qwen3-vl:8b",             "label": "Qwen3-VL 8B",      "info": "~6GB RAM  |  Main quality tier, next-gen Qwen  |  Requires Ollama 0.7+",  "promptProfile": "standard" },
+    { "value": "qwen3-vl:8b",             "label": "Qwen3-VL 8B",      "info": "~6GB RAM  |  Newer Qwen, currently slow on Ollama (60-180s) — prefer 2.5-VL 7B for now",  "promptProfile": "standard" },
     { "value": "gemma4:31b",              "label": "Gemma 4 31B",      "info": "~14GB RAM  |  High-quality dense, strong all-rounder",                    "promptProfile": "standard" }
   ]
 }
