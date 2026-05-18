@@ -92,6 +92,13 @@ local function buildModelItems(models, installed, isRunning)
         elseif isModelInstalled(installed, m.value) then
             status = "  ✓"
             covered[m.value] = true
+            -- If the suggested value has no explicit tag (e.g. "moondream"),
+            -- cover its ":latest" form too. Otherwise the extra-pass below
+            -- treats "moondream:latest" as an unlisted install and adds a
+            -- duplicate row under the suggested entry.
+            if not m.value:find(":") then
+                covered[m.value .. ":latest"] = true
+            end
         else
             status = "  —  not installed"
         end

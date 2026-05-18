@@ -120,16 +120,18 @@ M.OPENAI_MODELS = {
     { value = "gpt-5.4",      label = "GPT-5.4",      cost = "~$0.007",  promptProfile = "standard" },
 }
 
--- Gemini 3 model IDs use dots for version numbers and a "-preview" suffix.
--- These are the current IDs as of April 2026; "gemini-3-pro-preview" was
--- shut down 2026-03-09 in favour of the 3.1 variant.
+-- Gemini 3 model IDs use dots for version numbers. Most are still "-preview"
+-- as of April 2026, but Flash-Lite graduated to GA on 2026-04 and dropped the
+-- suffix (its preview ID will fail after 2026-05-25). gemini-3-pro-preview
+-- was shut down 2026-03-09 in favour of the 3.1 variant. Expect similar
+-- promotions as the rest of the 3.x line graduates.
 -- Gemini 2.5 Pro is kept as a legacy entry — it correctly IDs specific
 -- resorts/landmarks the 3.x preview series doesn't always surface. 2.5
 -- Flash and 2.5 Flash-Lite were dropped after QA showed them either
 -- generic-only or emitting confident wrong specifics; 3.x supersedes them
 -- at the same price points.
 M.GEMINI_MODELS = {
-    { value = "gemini-3.1-flash-lite-preview", label = "Gemini 3.1 Flash-Lite",   cost = "~$0.0002", promptProfile = "standard" },
+    { value = "gemini-3.1-flash-lite",         label = "Gemini 3.1 Flash-Lite",   cost = "~$0.0002", promptProfile = "standard" },
     { value = "gemini-3-flash-preview",        label = "Gemini 3 Flash",          cost = "~$0.0008", promptProfile = "standard" },
     { value = "gemini-3.1-pro-preview",        label = "Gemini 3.1 Pro",          cost = "~$0.003",  promptProfile = "standard" },
     { value = "gemini-2.5-pro",                label = "Gemini 2.5 Pro (legacy)", cost = "~$0.005",  promptProfile = "standard" },

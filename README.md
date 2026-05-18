@@ -153,12 +153,12 @@ Qwen2.5-VL and Qwen3-VL models require **Ollama 0.7+**. Gemma 4 and MiniCPM-V 4.
 
 | Model | ~Cost/image | Notes |
 |---|---|---|
-| Gemini 3.1 Flash-Lite | $0.0002 | Cheapest cloud option anywhere. Clean generics; rarely names specific landmarks. |
+| Gemini 3.1 Flash-Lite | $0.0002 | Cheapest cloud option anywhere. Clean generics; rarely names specific landmarks. GA as of April 2026. |
 | Gemini 3 Flash | $0.0008 | Cheap + fast; comparable quality to Flash-Lite. |
 | **Gemini 3.1 Pro** | $0.003 | **Default.** Strongest at naming specific landmarks/resorts/parks. |
 | Gemini 2.5 Pro (legacy) | $0.005 | Kept as a fallback — still recognizes some specific properties the 3.x preview series misses. Google is phasing 2.5 out; may disappear without notice. |
 
-All Gemini 3 IDs are currently preview-tier (as of April 2026).
+Gemini 3.1 Flash-Lite is GA as of April 2026. Gemini 3 Flash and Gemini 3.1 Pro are still preview-tier and may rotate IDs without much notice — if you see "HTTP 404 model not found," open Settings and pick a different Gemini model.
 
 ### Keyword settings
 
@@ -269,7 +269,7 @@ Other factors that affect Ollama speed:
 | Ollama: model shows "not installed" | Click **Install Model**. Terminal opens and runs `ollama pull`. |
 | Claude / OpenAI / Gemini: "HTTP 401" | Invalid or revoked API key. Regenerate at the provider's console and paste into Settings. |
 | Claude / OpenAI / Gemini: "HTTP 429" | Rate limited. Wait a minute and retry. |
-| Gemini: "model not found" | Google rotated a preview ID. Open Settings, pick a different Gemini model. Gemini 2.5 Pro legacy is stable; 3.x are preview-tier. |
+| Gemini: "model not found" | Google rotated a preview ID. Open Settings, pick a different Gemini model. Gemini 2.5 Pro legacy and Gemini 3.1 Flash-Lite are stable IDs; Gemini 3 Flash and Gemini 3.1 Pro are still preview-tier and may rotate. |
 | Keywords not under parent | Lightroom SDK limitation with pre-existing root-level keywords of the same name. Delete root-level AI keywords before switching to a parent. |
 | Plugin UI feels frozen mid-run | Normal — see Performance notes above. Progress updates between images. |
 

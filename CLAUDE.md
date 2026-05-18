@@ -55,8 +55,8 @@ A macOS-only Lightroom Classic plugin that generates and applies searchable keyw
 - Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}`
 - Headers: Content-Type: application/json (API key in URL query param)
 - Body: `{ contents: [{ parts: [{ inlineData: { mimeType: "image/jpeg", data: base64 } }, { text: prompt }] }] }`
-- Models: gemini-3.1-flash-lite-preview (~$0.0002/image), gemini-3-flash-preview (~$0.0008/image), gemini-3.1-pro-preview (~$0.003/image), gemini-2.5-pro legacy (~$0.005/image)
-- Note: Gemini 3 IDs use dots and a "-preview" suffix. gemini-3-pro-preview was shut down 2026-03-09 in favour of the 3.1 variant; expect similar promotions as other models graduate from preview. 2.5 Pro kept as a legacy hedge for landmark-specific recall; 2.5 Flash and 2.5 Flash-Lite dropped (QA showed them either generic-only or emitting wrong specifics).
+- Models: gemini-3.1-flash-lite (~$0.0002/image, GA), gemini-3-flash-preview (~$0.0008/image), gemini-3.1-pro-preview (~$0.003/image), gemini-2.5-pro legacy (~$0.005/image)
+- Note: Gemini 3 IDs use dots for version numbers. Flash-Lite graduated to GA in April 2026 and dropped the "-preview" suffix (its preview ID will fail after 2026-05-25). gemini-3-pro-preview was shut down 2026-03-09 in favour of the 3.1 variant; expect similar promotions as the rest of the 3.x line graduates. 2.5 Pro kept as a legacy hedge for landmark-specific recall; 2.5 Flash and 2.5 Flash-Lite dropped (QA showed them either generic-only or emitting wrong specifics).
 
 ## Image Rendering
 - Cloud providers (Claude, OpenAI, Gemini): 1568px long edge
